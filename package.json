@@ -1,0 +1,23 @@
+{
+  "name": "synusersai",
+  "version": "0.1.0",
+  "description": "Parameterizable Cognitive Dynamics Engine - 8-agent debate simulation with Markdown reports",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "synusersai": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
