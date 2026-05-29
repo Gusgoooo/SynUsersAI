@@ -1,5 +1,5 @@
-import { AgentPersona, SimulationSnapshot, UtteranceMessage } from './types.js'
-import { cosineSimilarity } from './llm.js'
+import { AgentPersona, SimulationSnapshot, UtteranceMessage } from './types'
+import { cosineSimilarity } from './llm'
 
 interface FlashpointEntry {
   concept: string
@@ -74,7 +74,7 @@ export function generateMarkdownReport(
     const totalShift = cdLog.reduce((sum, v) => sum + v, 0)
     const initialBelief = getInitialBelief(persona, snapshot)
     lines.push(
-      `| ${persona.name} | ${truncate(initialBelief, 40)} | ${truncate(persona.current_belief_summary, 40)} | ${totalShift.toFixed(3)} |`
+      `| ${persona.name} | ${truncate(initialBelief, 40)} | ${truncate(persona.stance, 40)} | ${totalShift.toFixed(3)} |`
     )
   }
   lines.push('')
@@ -153,8 +153,8 @@ function findConsensusBreaker(snapshot: SimulationSnapshot, personas: AgentPerso
 
 function getInitialBelief(persona: AgentPersona, snapshot: SimulationSnapshot): string {
   const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-  if (cdLog.length === 0) return persona.current_belief_summary
-  return persona.current_belief_summary
+  if (cdLog.length === 0) return persona.stance
+  return persona.stance
 }
 
 function extractConcepts(text: string): string[] {
