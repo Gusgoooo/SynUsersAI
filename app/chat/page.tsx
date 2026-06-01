@@ -6,12 +6,35 @@ import { useSimulationStore } from '@/lib/simulation-store'
 import { SimulationThread } from '@/components/simulation-thread'
 import { DynamicsPanel } from '@/components/dynamics-panel'
 import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { useLocaleStore } from '@/lib/locale-store'
+
+const COPY = {
+  zh: {
+    exit: '← 退出',
+    running: (round: number) => `进行中 · 第 ${round} 轮`,
+    completed: '已完成',
+    waiting: '等待开始',
+    stop: '停止',
+    report: '生成报告',
+    viewReport: '查看报告 →',
+  },
+  en: {
+    exit: '← Exit',
+    running: (round: number) => `Running · Round ${round}`,
+    completed: 'Completed',
+    waiting: 'Waiting to start',
+    stop: 'Stop',
+    report: 'Generate report',
+    viewReport: 'View report →',
+  },
+}
 
 export default function ChatPage() {
   const router = useRouter()
   const { config, status, agents, messages, setStatus, addMessage, startStreamMessage, appendStreamChunk, finalizeStreamMessage, updateAgent, addImpulseScores, addConvergenceSnapshot, addCognitiveEvent, setReport } =
     useSimulationStore()
+  const locale = useLocaleStore((s) => s.locale)
+  const copy = COPY[locale]
   const abortRef = useRef<AbortController | null>(null)
   const [roundCount, setRoundCount] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(320)
@@ -60,6 +83,7 @@ export default function ChatPage() {
           mode: config.mode,
           duration: config.duration,
           model: config.model || 'gpt-5.4',
+          language: config.locale || locale,
           personas: agents,
         }),
         signal: abortController.signal,
@@ -104,13 +128,26 @@ export default function ChatPage() {
     function handleSSEEvent(event: string, data: Record<string, unknown>) {
       switch (event) {
         case 'stream-start':
-          startStreamMessage(data.id as string, data.speakerId as string, data.speakerName as string)
+          startStreamMessage(
+            data.id as string,
+            data.speakerId as string,
+            data.speakerName as string,
+            data.evidence as never[] | undefined,
+            data.usedEvidenceIds as string[] | undefined,
+            data.activatedMemories as never[] | undefined
+          )
           break
         case 'stream-chunk':
           appendStreamChunk(data.id as string, data.chunk as string)
           break
         case 'stream-end':
-          finalizeStreamMessage(data.id as string, data.text as string)
+          finalizeStreamMessage(
+            data.id as string,
+            data.text as string,
+            data.evidence as never[] | undefined,
+            data.usedEvidenceIds as string[] | undefined,
+            data.activatedMemories as never[] | undefined
+          )
           if (data.speakerId !== 'system') {
             setRoundCount((c) => c + 1)
           }
@@ -186,12 +223,12 @@ export default function ChatPage() {
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleExit}>
-            ← 退出
+            {copy.exit}
           </Button>
           <div>
             <h1 className="font-semibold text-sm">{config.topic}</h1>
             <p className="text-[11px] text-muted-foreground">
-              {status === 'running' ? `进行中 · 第 ${roundCount} 轮` : status === 'completed' ? '已完成' : '等待开始'}
+              {status === 'running' ? copy.running(roundCount) : status === 'completed' ? copy.completed : copy.waiting}
             </p>
           </div>
         </div>
@@ -199,19 +236,18 @@ export default function ChatPage() {
           {status === 'running' && (
             <>
               <Button variant="outline" size="sm" onClick={handleStop}>
-                停止
+                {copy.stop}
               </Button>
               <Button size="sm" onClick={handleGenerateReport}>
-                生成报告
+                {copy.report}
               </Button>
             </>
           )}
           {status === 'completed' && (
             <Button size="sm" onClick={() => router.push('/report')}>
-              查看报告 →
+              {copy.viewReport}
             </Button>
           )}
-          <ThemeToggle />
         </div>
       </header>
 

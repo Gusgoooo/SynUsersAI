@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { useABTestStore, type ABTestPersona } from '@/lib/abtest-store'
+import { useLocaleStore } from '@/lib/locale-store'
 
 const OCEAN_LABELS: Record<string, string> = {
   openness: '开放性',
@@ -30,6 +30,7 @@ const BIAS_LABELS: Record<string, string> = {
 
 export default function ABTestConfigPage() {
   const router = useRouter()
+  const locale = useLocaleStore((s) => s.locale)
   const {
     concepts, segments, personas,
     updateConceptName, updateConceptAttribute, addConceptAttribute, removeConceptAttribute,
@@ -49,8 +50,8 @@ export default function ABTestConfigPage() {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="text-center space-y-4">
-          <p className="text-muted-foreground">请先填写方案内容</p>
-          <Button onClick={() => router.push('/')}>返回首页</Button>
+          <p className="text-muted-foreground">{locale === 'en' ? 'Please add concept content first' : '请先填写方案内容'}</p>
+          <Button onClick={() => router.push('/')}>{locale === 'en' ? 'Back home' : '返回首页'}</Button>
         </div>
       </div>
     )
@@ -92,14 +93,10 @@ export default function ABTestConfigPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">审核方案 & 画像</h1>
-          <p className="text-sm text-muted-foreground mt-1">确认 AI 生成的属性拆解和用户画像，可直接编辑微调</p>
+          <h1 className="text-xl font-semibold tracking-tight">{locale === 'en' ? 'Review Concepts & Personas' : '审核方案 & 画像'}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{locale === 'en' ? 'Confirm the AI-generated attributes and personas. You can edit them before evaluation.' : '确认 AI 生成的属性拆解和用户画像，可直接编辑微调'}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,5 +1,7 @@
 import { chatCompletionJSON, chatCompletionStream, type ModelProvider, type StreamChunk } from '@/lib/engine/llm'
 import { computePersonaMetrics, computeAcceptance, aggregateScores, type ConceptAttributes, type PersonaMetrics, type AcceptanceScores } from '@/lib/engine/acceptance-model'
+import { languageInstruction, normalizeLocale, type Locale } from '@/lib/locale'
+import { normalizeBiases, normalizeOcean } from '@/lib/persona/defaults'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -37,7 +39,7 @@ interface GeneratedPersona {
   biases: { noveltyResistance: number; authorityDeference: number; lossAversion: number; confirmationBias: number; socialProof: number; anchoring: number }
 }
 
-function formatConceptContent(concept: Concept): string {
+function formatConceptContent(concept: Concept, locale: Locale = 'zh'): string {
   let content = concept.description || ''
   if (concept.attributes && concept.attributes.length > 0) {
     const attrLines = concept.attributes
@@ -45,14 +47,14 @@ function formatConceptContent(concept: Concept): string {
       .map(a => `- ${a.key}: ${a.value}`)
       .join('\n')
     if (attrLines) {
-      content += (content ? '\n\n' : '') + '属性拆解：\n' + attrLines
+      content += (content ? '\n\n' : '') + (locale === 'en' ? 'Attribute breakdown:\n' : '属性拆解：\n') + attrLines
     }
   }
   return content
 }
 
-function getConceptLabel(concept: Concept, index: number): string {
-  return concept.name || `方案${String.fromCharCode(65 + index)}`
+function getConceptLabel(concept: Concept, index: number, locale: Locale = 'zh'): string {
+  return concept.name || (locale === 'en' ? `Concept ${String.fromCharCode(65 + index)}` : `方案${String.fromCharCode(65 + index)}`)
 }
 
 interface EvalConfig {
@@ -71,10 +73,20 @@ const SCENARIO_PROMPTS: Record<string, string> = {
   custom: '',
 }
 
+const SCENARIO_PROMPTS_EN: Record<string, string> = {
+  friend: 'A trusted friend or coworker enthusiastically says, "I found something you should try," then explains this concept to you.',
+  ad: 'You see this concept as an in-feed ad while scrolling on your phone.',
+  search: 'You are actively looking for a solution to your current pain point and discover this while comparing options.',
+  mandate: 'Your company or team announces that everyone may need to use this solution, so you are evaluating whether you can accept it.',
+  custom: '',
+}
+
 export async function POST(req: Request) {
-  const { concepts, segments, dimensions, model = 'gpt-5.4', agentCount = 8, evalConfig } = await req.json()
+  const { concepts, segments, dimensions, model = 'gpt-5.4', agentCount = 8, evalConfig, language = 'zh' } = await req.json()
+  const locale = normalizeLocale(language)
   const config: EvalConfig = evalConfig || { scenario: 'friend', customScenario: '', decisionCriteria: '', hypothesis: '', protocol: 'sequential' }
-  const scenarioPrompt = config.scenario === 'custom' ? config.customScenario : (SCENARIO_PROMPTS[config.scenario] || SCENARIO_PROMPTS.friend)
+  const scenarioSet = locale === 'en' ? SCENARIO_PROMPTS_EN : SCENARIO_PROMPTS
+  const scenarioPrompt = config.scenario === 'custom' ? config.customScenario : (scenarioSet[config.scenario] || scenarioSet.friend)
 
   const encoder = new TextEncoder()
   const { readable, writable } = new TransformStream()
@@ -91,9 +103,25 @@ export async function POST(req: Request) {
       // ═══════════════════════════════════════════
       await send('progress', { phase: 'attributes', current: 0, total: 1 })
 
-      const conceptAttrsPrompt = `你是产品分析师。请为以下方案评估5个属性值（0-1之间的小数）：
+      const conceptAttrsPrompt = locale === 'en'
+        ? `You are a product analyst. Evaluate each concept on five normalized attributes from 0 to 1.
 
-${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「${getConceptLabel(c, i)}」：\n${formatConceptContent(c)}`).join('\n\n')}
+Language:
+${languageInstruction(locale)}
+
+${(concepts as Concept[]).map((c, i) => `Concept ${String.fromCharCode(65 + i)} "${getConceptLabel(c, i, locale)}":\n${formatConceptContent(c, locale)}`).join('\n\n')}
+
+Attribute definitions:
+- priceLevel: pricing level (0=free, 0.3=low price, 0.5=mid, 0.7=expensive, 1=extremely expensive)
+- noveltyLevel: market novelty (0=mature category, 0.5=some innovation, 1=unprecedented)
+- switchCost: migration cost (0=instant use, 0.5=requires learning, 1=major data/process migration)
+- socialValidation: social proof (0=unknown, 0.5=some traction, 1=well-known brand/category)
+- riskLevel: uncertainty/risk (0=proven, 0.5=some uncertainty, 1=unvalidated)
+
+Output JSON: {"concepts": [{"id":"concept ID", "priceLevel":number, "noveltyLevel":number, "switchCost":number, "socialValidation":number, "riskLevel":number}, ...]}`
+        : `你是产品分析师。请为以下方案评估5个属性值（0-1之间的小数）：
+
+${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「${getConceptLabel(c, i, locale)}」：\n${formatConceptContent(c, locale)}`).join('\n\n')}
 
 属性定义：
 - priceLevel: 定价水平（0=完全免费, 0.3=低价, 0.5=中等, 0.7=较贵, 1=极其昂贵）
@@ -147,9 +175,41 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
           total: segments.length,
         })
 
-        const conceptContext = (concepts as Concept[]).map((c, i) => `「${getConceptLabel(c, i)}」：${formatConceptContent(c).slice(0, 100)}`).join('\n')
+        const conceptContext = (concepts as Concept[]).map((c, i) => `「${getConceptLabel(c, i, locale)}」：${formatConceptContent(c, locale).slice(0, 100)}`).join('\n')
 
-        const prompt = `你是用户研究专家。生成${agentCount}个真实消费者画像。
+        const prompt = locale === 'en'
+          ? `You are a user research expert. Generate ${agentCount} realistic consumer personas.
+
+Language:
+${languageInstruction(locale)}
+
+Audience segment: ${segment.description}
+Concepts to evaluate:
+${conceptContext}
+
+Each user must follow this JSON structure:
+{
+  "name": "realistic English first name",
+  "background": "1-2 concise English sentences with role, age, life context, and spending power",
+  "personality": "short phrase describing temperament and decision tendency",
+  "currentSolution": "specific current alternative or product",
+  "monthlyBudget": "monthly budget for this category",
+  "decisionStyle": "impulsive/research-driven/social-proof-driven/price-sensitive/quality-first/etc.",
+  "painPoints": ["specific pain point 1","pain point 2"],
+  "tags": ["tag 1","tag 2","tag 3"],
+  "ocean": {"openness":0-100,"conscientiousness":0-100,"extraversion":0-100,"agreeableness":0-100,"neuroticism":0-100},
+  "biases": {"noveltyResistance":0-100,"authorityDeference":0-100,"lossAversion":0-100,"confirmationBias":0-100,"socialProof":0-100,"anchoring":0-100}
+}
+
+Requirements:
+- Keep ocean/biases mostly between 15 and 95; include some extreme profiles.
+- Include one very frugal free-only persona, one high willingness-to-pay persona, and one skeptical burned-before persona.
+- currentSolution must be specific.
+- painPoints must come from realistic usage contexts.
+- Traits and biases must match background and decision style.
+
+Return JSON only: {"agents":[...]}`
+          : `你是用户研究专家。生成${agentCount}个真实消费者画像。
 
 人群特征：${segment.description}
 将评估的方案：${conceptContext}
@@ -185,8 +245,8 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
         const personas = (result.agents || []).map((a) => ({
           ...a,
           id: crypto.randomUUID(),
-          ocean: a.ocean || { openness: 50, conscientiousness: 50, extraversion: 50, agreeableness: 50, neuroticism: 50 },
-          biases: a.biases || { noveltyResistance: 50, authorityDeference: 50, lossAversion: 50, confirmationBias: 50, socialProof: 50, anchoring: 50 },
+          ocean: normalizeOcean(a.ocean),
+          biases: normalizeBiases(a.biases),
         }))
 
         allPersonas[segment.id] = personas
@@ -231,8 +291,52 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
             const acceptance = computeAcceptance(metrics, attrs)
 
             // Qualitative LLM evaluation (情境沉浸 + 维度评分)
-            const dimList = (dimensions as string[]).map((d: string) => `"${d}": {"score": 1-10分, "reason": "结合你个人情况的具体理由(30-60字)"}`).join(',\n  ')
-            const evalPrompt = `你是${persona.name}。以下是你的真实情况，请完全代入：
+            const dimList = (dimensions as string[]).map((d: string) => locale === 'en'
+              ? `"${d}": {"score": 1-10, "reason": "specific reason tied to your budget/pain/current solution/decision style, 20-45 English words"}`
+              : `"${d}": {"score": 1-10分, "reason": "结合你个人情况的具体理由(30-60字)"}`).join(',\n  ')
+            const evalPrompt = locale === 'en'
+              ? `You are ${persona.name}. Fully roleplay the following realistic consumer profile.
+
+Language:
+${languageInstruction(locale)}
+
+Who you are:
+- Background: ${persona.background}
+- Personality: ${persona.personality}
+- Decision style: ${persona.decisionStyle}
+- Monthly budget: ${persona.monthlyBudget}
+- Current solution: ${persona.currentSolution}
+- Current pain points: ${persona.painPoints.join('; ')}
+
+Scenario:
+${scenarioPrompt}
+
+Concept: "${getConceptLabel(concept, (concepts as Concept[]).indexOf(concept), locale)}"
+${formatConceptContent(concept, locale)}
+
+Evaluate this concept based on your own situation:
+
+1. First reaction: intuitive, conversational, 20-45 English words. It can be excited, skeptical, annoyed, or indifferent.
+2. Score each dimension from 1-10 and give a concrete reason tied to your personal context.
+3. Overall attitude: strong_yes / yes / neutral / no / strong_no
+4. Attitude reason: one concise English sentence explaining the core reason.
+
+Rules:
+- Scores must reflect your profile. If you are budget constrained and the concept is expensive, value/price scores should be lower.
+- Speak plainly. If it feels useless, say so.
+- Do not hedge with "it depends" or "each option has pros and cons".
+- Scores must show contrast; do not give everything 5-7.
+
+Output JSON:
+{
+  "firstImpression": "first reaction",
+  "dimensionScores": {
+  ${dimList}
+  },
+  "attitude": "strong_yes/yes/neutral/no/strong_no",
+  "attitudeReason": "core attitude reason"
+}`
+              : `你是${persona.name}。以下是你的真实情况，请完全代入：
 
 【你是谁】
 - 背景：${persona.background}
@@ -245,8 +349,8 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
 【场景】
 ${scenarioPrompt}
 
-【方案内容】「${getConceptLabel(concept, (concepts as Concept[]).indexOf(concept))}」
-${formatConceptContent(concept)}
+【方案内容】「${getConceptLabel(concept, (concepts as Concept[]).indexOf(concept), locale)}」
+${formatConceptContent(concept, locale)}
 
 请基于你的个人情况，对这个方案做出真实评价：
 
@@ -279,7 +383,9 @@ ${formatConceptContent(concept)}
               )
             } catch (e) {
               console.error(`[ABTest R1] ${persona.name} × ${concept.name}:`, e)
-              qualitative = { firstImpression: '评估异常', dimensionScores: {}, attitude: 'neutral', attitudeReason: '无法评估' }
+              qualitative = locale === 'en'
+                ? { firstImpression: 'Evaluation failed', dimensionScores: {}, attitude: 'neutral', attitudeReason: 'Unable to evaluate' }
+                : { firstImpression: '评估异常', dimensionScores: {}, attitude: 'neutral', attitudeReason: '无法评估' }
             }
 
             if (!round1Results[persona.id]) round1Results[persona.id] = {}
@@ -338,12 +444,36 @@ ${formatConceptContent(concept)}
 
             const conceptSummaries = (concepts as Concept[]).map((c, idx) => {
               const r1 = round1Results[persona.id]?.[c.id]
-              const impression = r1?.impression || '未评价'
-              const attitude = r1?.attitude || '未表态'
-              return `- 「${getConceptLabel(c, idx)}」(ID:${c.id})：${formatConceptContent(c).slice(0, 60)}（你的态度：${attitude}，你说：${impression}）`
+              const impression = r1?.impression || (locale === 'en' ? 'not evaluated' : '未评价')
+              const attitude = r1?.attitude || (locale === 'en' ? 'no attitude yet' : '未表态')
+              return locale === 'en'
+                ? `- "${getConceptLabel(c, idx, locale)}" (ID:${c.id}): ${formatConceptContent(c, locale).slice(0, 80)} (your attitude: ${attitude}; you said: ${impression})`
+                : `- 「${getConceptLabel(c, idx, locale)}」(ID:${c.id})：${formatConceptContent(c, locale).slice(0, 60)}（你的态度：${attitude}，你说：${impression}）`
             }).join('\n')
 
-            const choicePrompt = `你是${persona.name}。${persona.background}。
+            const choicePrompt = locale === 'en'
+              ? `You are ${persona.name}. ${persona.background}
+Decision style: ${persona.decisionStyle}. Monthly budget: ${persona.monthlyBudget}.
+
+Language:
+${languageInstruction(locale)}
+
+You have reviewed these concepts:
+${conceptSummaries}
+
+You must choose one. Rules:
+- Your budget/attention only allows one.
+- Do not say "it depends", "either is fine", or "they all have strengths".
+- Your choice must be consistent with your earlier reactions.
+- Give a fatal reason for each rejected concept.
+
+Output JSON:
+{
+  "chosenConceptId": "chosen concept ID, must be one of the IDs above",
+  "reasoning": "why you chose it, under 20 English words",
+  "rejectionReasons": {"rejected concept ID": "one concise fatal reason"}
+}`
+              : `你是${persona.name}。${persona.background}。
 决策风格：${persona.decisionStyle}。月预算：${persona.monthlyBudget}。
 
 你看了这几个方案：
@@ -404,7 +534,7 @@ ${conceptSummaries}
                 personaName: persona.name,
                 segmentId: segment.id,
                 chosenConceptId: bestId,
-                reasoning: '基于量化模型推断',
+                reasoning: locale === 'en' ? 'Inferred from quantitative model' : '基于量化模型推断',
                 rejectionReasons: {},
               })
             }

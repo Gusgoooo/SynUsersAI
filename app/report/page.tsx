@@ -5,18 +5,38 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSimulationStore } from '@/lib/simulation-store'
 import { Button } from '@/components/ui/button'
+import { useLocaleStore } from '@/lib/locale-store'
+
+const COPY = {
+  zh: {
+    empty: '暂无报告数据',
+    backConfig: '返回配置',
+    newSimulation: '← 新模拟',
+    copyMarkdown: '复制 Markdown',
+    download: '下载 .md',
+  },
+  en: {
+    empty: 'No report data yet',
+    backConfig: 'Back to setup',
+    newSimulation: '← New simulation',
+    copyMarkdown: 'Copy Markdown',
+    download: 'Download .md',
+  },
+}
 
 export default function ReportPage() {
   const router = useRouter()
   const report = useSimulationStore((s) => s.report)
+  const locale = useLocaleStore((s) => s.locale)
+  const copy = COPY[locale]
 
   if (!report) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-muted-foreground">暂无报告数据</p>
+          <p className="text-muted-foreground">{copy.empty}</p>
           <Button variant="outline" onClick={() => router.push('/')}>
-            返回配置
+            {copy.backConfig}
           </Button>
         </div>
       </div>
@@ -42,14 +62,14 @@ export default function ReportPage() {
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 flex items-center justify-between">
           <Button variant="ghost" onClick={() => router.push('/')}>
-            ← 新模拟
+            {copy.newSimulation}
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleCopy}>
-              复制 Markdown
+              {copy.copyMarkdown}
             </Button>
             <Button variant="outline" size="sm" onClick={handleDownload}>
-              下载 .md
+              {copy.download}
             </Button>
           </div>
         </div>

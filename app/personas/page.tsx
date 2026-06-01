@@ -4,19 +4,43 @@ import { useRouter } from 'next/navigation'
 import { useSimulationStore } from '@/lib/simulation-store'
 import { PersonaCard } from '@/components/persona-card'
 import { Button } from '@/components/ui/button'
+import { useLocaleStore } from '@/lib/locale-store'
+
+const COPY = {
+  zh: {
+    empty: '尚未生成人设',
+    back: '返回配置',
+    title: 'AI 人设预览',
+    topic: '话题',
+    agents: '位 Agent',
+    reconfigure: '重新配置',
+    start: '开始对话',
+  },
+  en: {
+    empty: 'No personas generated yet',
+    back: 'Back to setup',
+    title: 'AI Persona Preview',
+    topic: 'Topic',
+    agents: 'agents',
+    reconfigure: 'Reconfigure',
+    start: 'Start chat',
+  },
+}
 
 export default function PersonasPage() {
   const router = useRouter()
   const agents = useSimulationStore((s) => s.agents)
   const config = useSimulationStore((s) => s.config)
+  const locale = useLocaleStore((s) => s.locale)
+  const copy = COPY[locale]
 
   if (agents.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-muted-foreground">尚未生成人设</p>
+          <p className="text-muted-foreground">{copy.empty}</p>
           <Button variant="outline" onClick={() => router.push('/')}>
-            返回配置
+            {copy.back}
           </Button>
         </div>
       </div>
@@ -28,17 +52,17 @@ export default function PersonasPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-semibold">AI 人设预览</h1>
+            <h1 className="text-xl font-semibold">{copy.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              话题：{config.topic} · {agents.length} 位 Agent · {config.duration} min
+              {copy.topic}: {config.topic} · {agents.length} {copy.agents} · {config.duration} min
             </p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => router.push('/')}>
-              重新配置
+              {copy.reconfigure}
             </Button>
             <Button onClick={() => router.push('/chat')}>
-              开始对话
+              {copy.start}
             </Button>
           </div>
         </div>

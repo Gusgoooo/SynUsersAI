@@ -1,4 +1,6 @@
 import { chatCompletionJSON, type ModelProvider } from '@/lib/engine/llm'
+import { languageInstruction, normalizeLocale } from '@/lib/locale'
+import { normalizeBiases, normalizeOcean } from '@/lib/persona/defaults'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -28,18 +30,51 @@ interface GeneratedPersona {
 }
 
 export async function POST(req: Request) {
-  const { concepts, segments, model = 'gpt-5.4', agentCount = 8 } = await req.json()
+  const { concepts, segments, model = 'gpt-5.4', agentCount = 8, language = 'zh' } = await req.json()
+  const locale = normalizeLocale(language)
 
   const conceptDescriptions = (concepts as ConceptInput[])
-    .map((c, i) => `方案${String.fromCharCode(65 + i)}：\n${c.description}`)
+    .map((c, i) => `${locale === 'en' ? 'Concept' : '方案'}${String.fromCharCode(65 + i)}：\n${c.description}`)
     .join('\n\n---\n\n')
 
   const segmentDescriptions = (segments as SegmentInput[])
-    .map((s, i) => `人群${i + 1}：${s.description}`)
+    .map((s, i) => `${locale === 'en' ? 'Segment' : '人群'}${i + 1}：${s.description}`)
     .join('\n')
 
   // Call A: 方案名称 + 属性拆解
-  const conceptPrompt = `分析以下方案和人群，为每个生成简短名称和属性拆解。
+  const conceptPrompt = locale === 'en'
+    ? `Analyze the following concepts and audience segments. Generate a concise English name and key attribute breakdown for each concept, plus a short English label for each segment.
+
+Language:
+${languageInstruction(locale)}
+
+Concepts:
+${conceptDescriptions}
+
+Audience segments:
+${segmentDescriptions}
+
+Output JSON:
+{
+  "concepts": [
+    {
+      "name": "short concept name in English",
+      "attributes": [
+        {"id":"random","key":"attribute name such as price/core feature/use case/differentiator","value":"specific value"}
+      ]
+    }
+  ],
+  "segments": [
+    {"name": "short segment label in English"}
+  ]
+}
+
+Requirements:
+- Concept names should clearly reveal the positioning.
+- Extract 3-5 key attributes from each concept.
+- Segment labels should be concise and recognizable.
+- Return JSON only, no markdown.`
+    : `分析以下方案和人群，为每个生成简短名称和属性拆解。
 
 方案内容：
 ${conceptDescriptions}
@@ -69,11 +104,43 @@ ${segmentDescriptions}
 
   // Call B: 为每个 segment 生成 personas
   const conceptContext = (concepts as ConceptInput[]).map((c, i) =>
-    `「方案${String.fromCharCode(65 + i)}」：${c.description.replace(/<[^>]+>/g, '').slice(0, 100)}`
+    `「${locale === 'en' ? 'Concept' : '方案'}${String.fromCharCode(65 + i)}」：${c.description.replace(/<[^>]+>/g, '').slice(0, 100)}`
   ).join('\n')
 
   const personaPromises = (segments as SegmentInput[]).map(async (segment) => {
-    const prompt = `你是用户研究专家。生成${agentCount}个真实消费者画像。
+    const prompt = locale === 'en'
+      ? `You are a user researcher. Generate ${agentCount} realistic consumer personas.
+
+Language:
+${languageInstruction(locale)}
+
+Audience segment: ${segment.description}
+Concepts to evaluate:
+${conceptContext}
+
+Each user must follow this JSON structure:
+{
+  "name": "realistic English first name",
+  "background": "1-2 concise English sentences with age, role, lifestyle, and spending context",
+  "personality": "short phrase describing personality and decision tendency",
+  "currentSolution": "specific current alternative, product, or workaround",
+  "monthlyBudget": "monthly budget for this category, e.g. '$10-30'",
+  "decisionStyle": "impulsive/research-driven/social-proof-driven/price-sensitive/quality-first/etc.",
+  "painPoints": ["specific current pain point 1","pain point 2"],
+  "tags": ["tag 1","tag 2","tag 3"],
+  "ocean": {"openness":0-100,"conscientiousness":0-100,"extraversion":0-100,"agreeableness":0-100,"neuroticism":0-100},
+  "biases": {"noveltyResistance":0-100,"authorityDeference":0-100,"lossAversion":0-100,"confirmationBias":0-100,"socialProof":0-100,"anchoring":0-100}
+}
+
+Requirements:
+- Keep ocean/biases mostly between 15 and 95; avoid bland average profiles.
+- Include one very frugal persona, one high willingness-to-pay persona, and one burned-before skeptical persona.
+- currentSolution must be a specific product or method.
+- painPoints must come from realistic usage contexts.
+- Each person's traits and biases must match their background and decision style.
+
+Return JSON only: {"agents":[...]}`
+      : `你是用户研究专家。生成${agentCount}个真实消费者画像。
 
 人群特征：${segment.description}
 将评估的方案：${conceptContext}
@@ -111,8 +178,8 @@ ${segmentDescriptions}
         personas: (result.agents || []).map(a => ({
           ...a,
           id: crypto.randomUUID(),
-          ocean: a.ocean || { openness: 50, conscientiousness: 50, extraversion: 50, agreeableness: 50, neuroticism: 50 },
-          biases: a.biases || { noveltyResistance: 50, authorityDeference: 50, lossAversion: 50, confirmationBias: 50, socialProof: 50, anchoring: 50 },
+          ocean: normalizeOcean(a.ocean),
+          biases: normalizeBiases(a.biases),
         })),
       }
     } catch (e) {
@@ -156,11 +223,11 @@ ${segmentDescriptions}
     console.error('[ABTest Prepare] Error:', err)
     return Response.json({
       concepts: (concepts as ConceptInput[]).map((_, i) => ({
-        name: `方案${String.fromCharCode(65 + i)}`,
+        name: locale === 'en' ? `Concept ${String.fromCharCode(65 + i)}` : `方案${String.fromCharCode(65 + i)}`,
         attributes: [],
       })),
       segments: (segments as SegmentInput[]).map((_, i) => ({
-        name: `人群${i + 1}`,
+        name: locale === 'en' ? `Segment ${i + 1}` : `人群${i + 1}`,
       })),
       personas: {},
     })

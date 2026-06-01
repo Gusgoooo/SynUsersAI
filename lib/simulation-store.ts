@@ -1,36 +1,21 @@
 import { create } from 'zustand'
+import type { Locale } from '@/lib/locale'
+import type {
+  ActivatedMemory,
+  PersonaCore,
+  PersonaEvidence,
+} from '@/lib/persona/types'
 
-export interface OceanProfile {
-  openness: number
-  conscientiousness: number
-  extraversion: number
-  agreeableness: number
-  neuroticism: number
-}
+export type {
+  ActivatedMemory,
+  BiasProfile,
+  EngagementCurve,
+  MemoryProfile,
+  OceanProfile,
+  PersonaEvidence,
+} from '@/lib/persona/types'
 
-export interface BiasProfile {
-  noveltyResistance: number
-  authorityDeference: number
-  lossAversion: number
-  confirmationBias: number
-  socialProof: number
-  anchoring: number
-}
-
-export interface SimAgent {
-  id: string
-  name: string
-  background: string
-  personality: string
-  stance: string
-  speakingStyle: string
-  knowledgeDomains: string[]
-  triggerKeywords: string[]
-  frictionTopics: string[]
-  tags: string[]
-  engagementCurve: 'steady' | 'fading' | 'warming' | 'burst' | 'erratic'
-  ocean: OceanProfile
-  biases: BiasProfile
+export interface SimAgent extends PersonaCore {
   energy: number
   turns_since_last_speak: number
   accumulated_dissonance: number
@@ -67,6 +52,9 @@ export interface SimMessage {
   speakerName: string
   text: string
   inner_thoughts: string
+  usedEvidenceIds?: string[]
+  evidence?: PersonaEvidence[]
+  activatedMemories?: ActivatedMemory[]
   timestamp: number
 }
 
@@ -80,7 +68,7 @@ export interface EngineParams {
 
 interface SimulationState {
   status: 'idle' | 'generating' | 'previewing' | 'running' | 'completed'
-  config: { topic: string; mode: string; duration: number; model?: string }
+  config: { topic: string; mode: string; duration: number; model?: string; locale: Locale }
   agents: SimAgent[]
   messages: SimMessage[]
   streamingMessages: Map<string, SimMessage>
@@ -89,13 +77,13 @@ interface SimulationState {
   cognitiveEvents: CognitiveEvent[]
   report: string | null
   engineParams: EngineParams
-  setConfig: (config: { topic: string; mode: string; duration: number; model?: string }) => void
+  setConfig: (config: { topic: string; mode: string; duration: number; model?: string; locale: Locale }) => void
   setStatus: (status: SimulationState['status']) => void
   setAgents: (agents: SimAgent[]) => void
   addMessage: (msg: SimMessage) => void
-  startStreamMessage: (id: string, speakerId: string, speakerName: string) => void
+  startStreamMessage: (id: string, speakerId: string, speakerName: string, evidence?: PersonaEvidence[], usedEvidenceIds?: string[], activatedMemories?: ActivatedMemory[]) => void
   appendStreamChunk: (id: string, chunk: string) => void
-  finalizeStreamMessage: (id: string, text: string) => void
+  finalizeStreamMessage: (id: string, text: string, evidence?: PersonaEvidence[], usedEvidenceIds?: string[], activatedMemories?: ActivatedMemory[]) => void
   updateAgent: (id: string, updates: Partial<SimAgent>) => void
   addImpulseScores: (scores: ImpulseScore[]) => void
   addConvergenceSnapshot: (snapshot: ConvergenceSnapshot) => void
@@ -115,7 +103,7 @@ const DEFAULT_ENGINE_PARAMS: EngineParams = {
 
 export const useSimulationStore = create<SimulationState>((set) => ({
   status: 'idle',
-  config: { topic: '', mode: 'generated', duration: 60 },
+  config: { topic: '', mode: 'generated', duration: 60, locale: 'zh' },
   agents: [],
   messages: [],
   streamingMessages: new Map(),
@@ -128,9 +116,9 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setStatus: (status) => set({ status }),
   setAgents: (agents) => set({ agents }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
-  startStreamMessage: (id, speakerId, speakerName) =>
+  startStreamMessage: (id, speakerId, speakerName, evidence, usedEvidenceIds, activatedMemories) =>
     set((s) => {
-      const msg: SimMessage = { id, speakerId, speakerName, text: '', inner_thoughts: '', timestamp: Date.now() }
+      const msg: SimMessage = { id, speakerId, speakerName, text: '', inner_thoughts: '', evidence, usedEvidenceIds, activatedMemories, timestamp: Date.now() }
       const newMap = new Map(s.streamingMessages)
       newMap.set(id, msg)
       return { streamingMessages: newMap, messages: [...s.messages, msg] }
@@ -147,13 +135,13 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         messages: s.messages.map(m => m.id === id ? updated : m),
       }
     }),
-  finalizeStreamMessage: (id, text) =>
+  finalizeStreamMessage: (id, text, evidence, usedEvidenceIds, activatedMemories) =>
     set((s) => {
       const newMap = new Map(s.streamingMessages)
       newMap.delete(id)
       return {
         streamingMessages: newMap,
-        messages: s.messages.map(m => m.id === id ? { ...m, text } : m),
+        messages: s.messages.map(m => m.id === id ? { ...m, text, evidence: evidence ?? m.evidence, usedEvidenceIds: usedEvidenceIds ?? m.usedEvidenceIds, activatedMemories: activatedMemories ?? m.activatedMemories } : m),
       }
     }),
   updateAgent: (id, updates) =>

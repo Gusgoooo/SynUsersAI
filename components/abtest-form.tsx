@@ -10,6 +10,7 @@ import { useABTestStore, type Concept, type Segment } from '@/lib/abtest-store'
 import { RichTextEditor } from '@/components/rich-text-editor'
 import { Stepper, Step } from '@/components/ui/stepper'
 import { marked } from 'marked'
+import { useLocaleStore } from '@/lib/locale-store'
 
 const RANDOM_CONCEPTS = [
   `# FlowMind AI写作助手 - 产品需求文档
@@ -213,9 +214,149 @@ const RANDOM_SEGMENTS = [
 痛点与决策触发点：1）团队效率——"人太贵了，能不能用工具把3个人的活让1个人干"；2）数据安全——"出了数据泄露我得背锅"；3）合规要求——"ISO27001/等保三级/SOC2必须有"；4）管理可视化——"我要随时看到团队的产出数据，别让我去问"；5）减少工具碎片化——"团队用了十几个工具，信息全割裂了"。`,
 ]
 
+const RANDOM_CONCEPTS_EN = [
+  `# FlowMind AI Writing Assistant - Product Requirements
+
+## Overview
+
+FlowMind helps knowledge workers turn fuzzy ideas into structured, polished writing. Instead of only generating text, it guides users through outlining, logic refinement, and draft expansion.
+
+## Target Users
+
+- Content creators and newsletter writers
+- Marketing and PR teams
+- Independent consultants
+- Technical writers and product managers
+
+## Core Value Proposition
+
+"Not just writing for you, but helping you think clearly before you write."
+
+## Key Features
+
+- Intelligent outline generation from a short idea
+- Brand voice memory and reusable writing context
+- Multi-language drafting and localization
+- Integrations with Notion, VS Code, and browser writing fields
+
+## Pricing
+
+- Free: 5 generations per day
+- Pro: $19/month for unlimited generation and memory
+- Team: $39/user/month with shared brand libraries`,
+  `# WordForge Content Factory - Product Requirements
+
+## Overview
+
+WordForge is a high-volume AI content production platform for small businesses, ecommerce sellers, and SEO teams. It focuses on speed, scale, and channel distribution.
+
+## Target Users
+
+- Small ecommerce teams that need product descriptions
+- SEO operators producing long-tail content
+- Agencies running multiple social accounts
+- Budget-conscious startups without a content team
+
+## Core Value Proposition
+
+"One person can operate like a full content team."
+
+## Key Features
+
+- Batch generation from keywords, CSV files, or competitor URLs
+- SEO optimization and metadata generation
+- Multi-channel formatting for blogs and social media
+- Duplicate reduction and content variation controls
+
+## Pricing
+
+- Starter: $9/month
+- Pro: $39/month
+- Business: $129/month with team workflows and API access`,
+]
+
+const RANDOM_SEGMENTS_EN = [
+  `25-35 year-old SaaS product managers in the United States and Canada. They work at seed to Series C software companies, spend much of their week in meetings and documentation, and are already familiar with Notion, Jira, Figma, Slack, and AI productivity tools.
+
+They are willing to pay for software that clearly saves time, but they expect a short path to ROI. They usually test tools quickly, ask peers for recommendations, and abandon products that do not show value within the first few days.
+
+Common pain points include information overload, writing specs under time pressure, fragmented cross-functional communication, and limited access to analytics support.`,
+  `18-24 year-old college students and graduate students. They are curious about new technology, but budget constrained. They rely on TikTok, YouTube, Reddit, Discord, and peer recommendations for tool discovery.
+
+They are skeptical of recurring subscriptions unless the product directly improves grades, job prospects, or creative output. Free tiers, student discounts, and social proof matter a lot.
+
+Typical use cases include essay writing, group projects, exam preparation, internship applications, and side projects such as newsletters or short-form content creation.`,
+  `35-50 year-old senior managers, directors, and executives at mid-sized and enterprise companies. They care less about personal convenience and more about team productivity, risk, procurement, security, and measurable ROI.
+
+They rarely adopt tools impulsively. Purchase decisions usually involve security review, pilot deployment, budget approval, and internal rollout planning.
+
+Their main concerns are data protection, compliance, total cost, employee adoption, and whether the product can reduce operational friction at team scale.`,
+]
+
+const COPY = {
+  zh: {
+    steps: {
+      concepts: '测试方案',
+      segments: '目标人群',
+      config: '测试配置',
+    },
+    addConcept: '+ 添加方案',
+    addSegment: '+ 添加人群',
+    conceptLabel: (i: number) => `方案 ${String.fromCharCode(65 + i)}`,
+    segmentLabel: (i: number) => `人群 ${i + 1}`,
+    randomFill: '随机填充',
+    upload: '上传',
+    conceptPlaceholder: '直接粘贴方案内容（支持富文本格式）...',
+    segmentPlaceholder: '描述该人群特征：年龄、职业、收入、消费习惯、关注点...',
+    next: '下一步',
+    previous: '上一步',
+    groupSize: '每组人数',
+    people: '人',
+    model: 'AI 模型',
+    scale: '测试规模',
+    conceptUnit: '方案',
+    segmentUnit: '人群',
+    evalUnit: '次评估',
+    analyzing: '分析中...',
+    start: '开始生成',
+    defaultConcept: (i: number) => `方案${String.fromCharCode(65 + i)}`,
+    defaultSegment: (i: number) => `人群${i + 1}`,
+  },
+  en: {
+    steps: {
+      concepts: 'Concepts',
+      segments: 'Audience',
+      config: 'Test setup',
+    },
+    addConcept: '+ Add concept',
+    addSegment: '+ Add segment',
+    conceptLabel: (i: number) => `Concept ${String.fromCharCode(65 + i)}`,
+    segmentLabel: (i: number) => `Segment ${i + 1}`,
+    randomFill: 'Random fill',
+    upload: 'Upload',
+    conceptPlaceholder: 'Paste the concept, product brief, landing-page copy, or PRD here...',
+    segmentPlaceholder: 'Describe the audience: age, role, income, habits, concerns, context...',
+    next: 'Next',
+    previous: 'Previous',
+    groupSize: 'Users / segment',
+    people: 'users',
+    model: 'AI model',
+    scale: 'Test scale',
+    conceptUnit: 'concepts',
+    segmentUnit: 'segments',
+    evalUnit: 'evaluations',
+    analyzing: 'Analyzing...',
+    start: 'Start generation',
+    defaultConcept: (i: number) => `Concept ${String.fromCharCode(65 + i)}`,
+    defaultSegment: (i: number) => `Segment ${i + 1}`,
+  },
+}
+
 export function ABTestForm() {
   const router = useRouter()
   const { concepts, segments, model, agentCount, setConcepts, setSegments, setModel, setAgentCount, addPersonas } = useABTestStore()
+  const locale = useLocaleStore((s) => s.locale)
+  const copy = COPY[locale]
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -234,7 +375,8 @@ export function ABTestForm() {
   }
 
   function fillRandomConcept(id: string) {
-    const pick = RANDOM_CONCEPTS[Math.floor(Math.random() * RANDOM_CONCEPTS.length)]
+    const source = locale === 'en' ? RANDOM_CONCEPTS_EN : RANDOM_CONCEPTS
+    const pick = source[Math.floor(Math.random() * source.length)]
     const html = marked.parse(pick) as string
     setConcepts(concepts.map(c => c.id === id ? { ...c, description: html } : c))
   }
@@ -253,7 +395,8 @@ export function ABTestForm() {
   }
 
   function fillRandomSegment(id: string) {
-    const pick = RANDOM_SEGMENTS[Math.floor(Math.random() * RANDOM_SEGMENTS.length)]
+    const source = locale === 'en' ? RANDOM_SEGMENTS_EN : RANDOM_SEGMENTS
+    const pick = source[Math.floor(Math.random() * source.length)]
     setSegments(segments.map(s => s.id === id ? { ...s, description: pick } : s))
   }
 
@@ -268,7 +411,7 @@ export function ABTestForm() {
       const res = await fetch('/api/abtest/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concepts, segments, model, agentCount }),
+        body: JSON.stringify({ concepts, segments, model, agentCount, language: locale }),
       })
 
       if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
@@ -278,14 +421,14 @@ export function ABTestForm() {
       if (data.concepts) {
         setConcepts(concepts.map((c, i) => ({
           ...c,
-          name: data.concepts[i]?.name || `方案${String.fromCharCode(65 + i)}`,
+          name: data.concepts[i]?.name || copy.defaultConcept(i),
           attributes: data.concepts[i]?.attributes || [],
         })))
       }
       if (data.segments) {
         setSegments(segments.map((s, i) => ({
           ...s,
-          name: data.segments[i]?.name || `人群${i + 1}`,
+          name: data.segments[i]?.name || copy.defaultSegment(i),
         })))
       }
 
@@ -307,7 +450,7 @@ export function ABTestForm() {
     <div className="space-y-6">
       <Stepper currentStep={step}>
         {/* Step 1: 测试方案 */}
-        <Step title="测试方案" action={<button type="button" onClick={addConcept} className="text-xs text-muted-foreground hover:text-foreground transition-colors">+ 添加方案</button>}>
+        <Step title={copy.steps.concepts} action={<button type="button" onClick={addConcept} className="text-xs text-muted-foreground hover:text-foreground transition-colors">{copy.addConcept}</button>}>
           <div className="space-y-3">
             {concepts.map((concept, i) => (
               <div key={concept.id} className="rounded-xl bg-muted/50 p-4 space-y-2 relative">
@@ -317,13 +460,13 @@ export function ABTestForm() {
                   </button>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground font-medium">方案 {String.fromCharCode(65 + i)}</span>
+                  <span className="text-[10px] text-muted-foreground font-medium">{copy.conceptLabel(i)}</span>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => fillRandomConcept(concept.id)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-                      随机填充
+                      {copy.randomFill}
                     </button>
                     <label className="text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                      上传
+                      {copy.upload}
                       <input type="file" accept=".doc,.docx,.xls,.xlsx,.csv,.txt,.pdf,.md" className="hidden" onChange={() => {}} />
                     </label>
                   </div>
@@ -331,18 +474,18 @@ export function ABTestForm() {
                 <RichTextEditor
                   value={concept.description}
                   onChange={(val) => updateConcept(concept.id, val)}
-                  placeholder="直接粘贴方案内容（支持富文本格式）..."
+                  placeholder={copy.conceptPlaceholder}
                 />
               </div>
             ))}
           </div>
           <Button className="w-full" onClick={() => setStep(1)} disabled={!canStep1}>
-            下一步
+            {copy.next}
           </Button>
         </Step>
 
         {/* Step 2: 目标人群 */}
-        <Step title="目标人群" action={<button type="button" onClick={addSegment} className="text-xs text-muted-foreground hover:text-foreground transition-colors">+ 添加人群</button>}>
+        <Step title={copy.steps.segments} action={<button type="button" onClick={addSegment} className="text-xs text-muted-foreground hover:text-foreground transition-colors">{copy.addSegment}</button>}>
           <div className="space-y-3">
             {segments.map((segment, i) => (
               <div key={segment.id} className="rounded-xl bg-muted/50 p-4 space-y-2 relative">
@@ -352,13 +495,13 @@ export function ABTestForm() {
                   </button>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground font-medium">人群 {i + 1}</span>
+                  <span className="text-[10px] text-muted-foreground font-medium">{copy.segmentLabel(i)}</span>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => fillRandomSegment(segment.id)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-                      随机填充
+                      {copy.randomFill}
                     </button>
                     <label className="text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                      上传
+                      {copy.upload}
                       <input type="file" accept=".doc,.docx,.xls,.xlsx,.csv,.txt,.pdf" className="hidden" onChange={() => {}} />
                     </label>
                   </div>
@@ -366,7 +509,7 @@ export function ABTestForm() {
                 <Textarea
                   value={segment.description}
                   onChange={(e) => updateSegment(segment.id, e.target.value)}
-                  placeholder="描述该人群特征：年龄、职业、收入、消费习惯、关注点..."
+                  placeholder={copy.segmentPlaceholder}
                   rows={3}
                   className="text-sm"
                 />
@@ -375,30 +518,30 @@ export function ABTestForm() {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setStep(0)}>
-              上一步
+              {copy.previous}
             </Button>
             <Button className="flex-1" onClick={() => setStep(2)} disabled={!canStep2}>
-              下一步
+              {copy.next}
             </Button>
           </div>
         </Step>
 
         {/* Step 3: 测试配置 */}
-        <Step title="测试配置">
+        <Step title={copy.steps.config}>
           <div className="grid grid-cols-3 gap-4 items-end">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">每组人数</Label>
+              <Label className="text-xs text-muted-foreground">{copy.groupSize}</Label>
               <Select value={String(agentCount)} onValueChange={(v) => setAgentCount(Number(v))}>
                 <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {[4, 6, 8, 10, 12].map(n => (
-                    <SelectItem key={n} value={String(n)}>{n} 人</SelectItem>
+                    <SelectItem key={n} value={String(n)}>{n} {copy.people}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">AI 模型</Label>
+              <Label className="text-xs text-muted-foreground">{copy.model}</Label>
               <Select value={model} onValueChange={(v) => v && setModel(v)}>
                 <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -408,21 +551,21 @@ export function ABTestForm() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">测试规模</Label>
+              <Label className="text-xs text-muted-foreground">{copy.scale}</Label>
               <div className="h-9 flex items-center">
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  {concepts.length} 方案 × {segments.length} 人群 × {agentCount} 人<br />
-                  = <span className="text-foreground font-medium">{concepts.length * segments.length * agentCount}</span> 次评估
+                  {concepts.length} {copy.conceptUnit} × {segments.length} {copy.segmentUnit} × {agentCount} {copy.people}<br />
+                  = <span className="text-foreground font-medium">{concepts.length * segments.length * agentCount}</span> {copy.evalUnit}
                 </p>
               </div>
             </div>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
-              上一步
+              {copy.previous}
             </Button>
             <Button className="flex-1" onClick={handleStart} disabled={loading}>
-              {loading ? '分析中...' : '开始生成'}
+              {loading ? copy.analyzing : copy.start}
             </Button>
           </div>
         </Step>

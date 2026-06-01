@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { useABTestStore } from '@/lib/abtest-store'
+import { useLocaleStore } from '@/lib/locale-store'
 
 const PRESET_DIMENSIONS = ['易用性', '价值感', '购买意愿', '信任度', '差异化', '创新性', '性价比', '切换意愿', '推荐意愿']
 
@@ -28,6 +28,7 @@ const PROTOCOL_OPTIONS = [
 export default function EvalConfigPage() {
   const router = useRouter()
   const { concepts, segments, dimensions, agentCount, setDimensions, setEvalConfig, setStatus } = useABTestStore()
+  const locale = useLocaleStore((s) => s.locale)
   const [customDim, setCustomDim] = useState('')
   const [scenario, setScenario] = useState('friend')
   const [customScenario, setCustomScenario] = useState('')
@@ -40,8 +41,8 @@ export default function EvalConfigPage() {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="text-center space-y-4">
-          <p className="text-muted-foreground">请先填写方案内容</p>
-          <Button onClick={() => router.push('/')}>返回首页</Button>
+          <p className="text-muted-foreground">{locale === 'en' ? 'Please add concept content first' : '请先填写方案内容'}</p>
+          <Button onClick={() => router.push('/')}>{locale === 'en' ? 'Back home' : '返回首页'}</Button>
         </div>
       </div>
     )
@@ -77,10 +78,6 @@ export default function EvalConfigPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-
       <div className="max-w-3xl mx-auto p-6 space-y-8">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">评估设置</h1>

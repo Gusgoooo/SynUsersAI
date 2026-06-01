@@ -1,4 +1,5 @@
 import type { AgentPersona, EmotionState, OceanProfile } from './types'
+import type { Locale } from '@/lib/locale'
 
 interface EmotionTransition {
   emotion: EmotionState
@@ -79,9 +80,34 @@ export function computeEmotionChain(
   return { emotion: newEmotion, intensity: Math.round(intensity * 100) / 100 }
 }
 
-export function getEmotionModifier(agent: AgentPersona): string {
+export function getEmotionModifier(agent: AgentPersona, locale: Locale = 'zh'): string {
   const { currentEmotion, emotionIntensity, ocean } = agent
   if (emotionIntensity < 0.2) return ''
+
+  if (locale === 'en') {
+    const intensityWord = emotionIntensity > 0.7 ? 'very' : emotionIntensity > 0.4 ? 'fairly' : 'slightly'
+
+    switch (currentEmotion) {
+      case 'irritated':
+        return ocean.agreeableness < 40
+          ? `You are ${intensityWord} irritated, so your tone becomes more blunt, direct, and possibly confrontational.`
+          : `You are ${intensityWord} impatient, but still controlling your tone.`
+      case 'anxious':
+        return `You are ${intensityWord} anxious, so your wording may feel quicker, more fragmented, and uneasy.`
+      case 'curious':
+        return `You are ${intensityWord} curious and want to ask for specifics.`
+      case 'excited':
+        return `You are ${intensityWord} excited, so your tone becomes more energetic and animated.`
+      case 'defensive':
+        return `You are ${intensityWord} defensive and may overreact to challenges against your view.`
+      case 'dismissive':
+        return `You are ${intensityWord} dismissive and may sound skeptical or dry.`
+      case 'empathetic':
+        return `You are ${intensityWord} empathetic and more willing to acknowledge others' concerns.`
+      default:
+        return ''
+    }
+  }
 
   const intensityWord = emotionIntensity > 0.7 ? '非常' : emotionIntensity > 0.4 ? '比较' : '有点'
 
