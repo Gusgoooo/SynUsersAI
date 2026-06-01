@@ -1,6 +1,7 @@
 import { chatCompletionJSON, cosineSimilarity, getEmbedding, type ModelProvider } from '@/lib/engine/llm'
+import type { LLMProviderConfigInput } from '@/lib/llm/provider-config'
 import { createRuntimePersonaState, normalizeBiases, normalizeOcean, normalizeScore } from '@/lib/persona/defaults'
-import type { MemoryProfile } from '@/lib/persona/types'
+import type { EngagementCurve, MemoryProfile } from '@/lib/persona/types'
 import type { Locale } from '@/lib/locale'
 import { languageInstruction } from '@/lib/locale'
 import type { EvidenceTheme, EvidenceUnit, PersonaEvidence, PopulationImportSummary, PopulationSource } from './types'
@@ -61,6 +62,13 @@ function normalizeStringArray(value: unknown): string[] {
     .map((item) => String(item || '').trim())
     .filter(Boolean)
     .slice(0, 8)
+}
+
+function normalizeEngagementCurve(value: unknown): EngagementCurve {
+  if (value === 'steady' || value === 'fading' || value === 'warming' || value === 'burst' || value === 'erratic') {
+    return value
+  }
+  return 'steady'
 }
 
 function normalizeMemoryProfile(raw: Partial<MemoryProfile> | undefined, locale: Locale): MemoryProfile {
@@ -169,7 +177,7 @@ Return raw JSON only:
       "background": "1-2 sentences grounded in the evidence",
       "personality": "short temperament and interaction style",
       "stance": "initial view toward the topic",
-      "speakingStyle": "language style inferred from the data",
+      "speakingStyle": "structural language style inferred from the data: sentence length, directness, vocabulary density, jargon level, emotional temperature",
       "knowledgeDomains": ["domain"],
       "triggerKeywords": ["keyword"],
       "frictionTopics": ["topic"],
@@ -184,7 +192,7 @@ Return raw JSON only:
         "educationCognitiveStyle": "education level and reasoning style reflected in vocabulary and abstraction level",
         "socialIdentity": "work/life role, peer group, class/circle, team/family responsibility",
         "emotionalTriggers": ["what makes this segment excited, defensive, bored, skeptical, or annoyed"],
-        "languageRegister": "how this persona naturally speaks: vocabulary, sentence length, directness, jargon level",
+        "languageRegister": "how this persona naturally speaks at a structural level: vocabulary density, sentence length, directness, jargon level, emotional temperature",
         "decisionHeuristics": ["rules of thumb this segment uses when judging products or ideas"]
       },
       "evidence": [
@@ -201,6 +209,7 @@ Quality rules:
 - If the evidence is thin, say so through a lower dataGroundingScore instead of pretending certainty.
 - Make the persona speak from the memory system, not by citing evidence IDs.
 - Use source vocabulary to shape language register, but do not make the persona sound like a report.
+- Do not turn language style into catchphrases. Avoid "often says...", "likes to use...", repeated signature words, verbal tics, or slogans. Language style should remain a subtle register and rhythm constraint.
 - Do not include source anchor IDs that are not listed above.`
   }
 
@@ -238,7 +247,7 @@ ${evidenceDigest}
       "background": "1-2句，必须受证据支撑",
       "personality": "简短性格和互动方式",
       "stance": "对话题的初始立场",
-      "speakingStyle": "从数据里推断出的表达方式",
+      "speakingStyle": "从数据里推断出的结构性表达方式：句长、直接程度、词汇密度、术语密度、情绪温度",
       "knowledgeDomains": ["领域"],
       "triggerKeywords": ["触发词"],
       "frictionTopics": ["雷区"],
@@ -253,7 +262,7 @@ ${evidenceDigest}
         "educationCognitiveStyle": "教育程度和认知风格，体现在词汇、抽象能力和推理方式里",
         "socialIdentity": "职业/生活角色、圈层、阶层、团队或家庭责任",
         "emotionalTriggers": ["什么会让这个群体兴奋、防御、厌烦、怀疑或焦虑"],
-        "languageRegister": "自然说话方式：词汇、句长、直接程度、行业术语密度",
+        "languageRegister": "结构性的自然说话方式：词汇密度、句长、直接程度、行业术语密度、情绪温度",
         "decisionHeuristics": ["判断产品或观点时常用的经验法则"]
       },
       "evidence": [
@@ -270,6 +279,7 @@ ${evidenceDigest}
 - 证据不足时，通过较低 dataGroundingScore 表示不确定，不要装作很确定。
 - 让 persona 从记忆系统里自然说话，不要在聊天中引用 evidenceId。
 - 可以吸收来源材料里的词汇和语气来塑造语言风格，但不要像报告。
+- 不要把语言风格做成口头禅。避免"常说..."、"喜欢用..."、反复出现的标志性词、固定语癖或宣传口号；语言风格应该是底层语域和节奏约束。
 - 不要引用上面不存在的 evidenceId。`
 }
 
@@ -284,7 +294,7 @@ function normalizeEvidence(rawEvidence: RawGeneratedPersona['evidence'], evidenc
         locator: unit.locator,
         quote: truncate(item.quote || unit.text, 260),
         reason: item.reason || '',
-    weight: normalizeScore(item.weight, 70),
+        weight: normalizeScore(item.weight, 70),
       }
     })
     .filter((item): item is PersonaEvidence => Boolean(item))
@@ -296,20 +306,26 @@ export async function synthesizePersonasFromEvidence({
   evidenceUnits,
   sources,
   model,
+  providerConfig,
   locale,
+  onProgress,
 }: {
   topic: string
   agentCount: number
   evidenceUnits: EvidenceUnit[]
   sources: PopulationSource[]
   model: ModelProvider
+  providerConfig?: LLMProviderConfigInput
   locale: Locale
+  onProgress?: (step: 'rank-evidence' | 'distill-memory-personas') => void | Promise<void>
 }) {
+  await onProgress?.('rank-evidence')
   const selectedEvidence = await rankEvidenceByTopic(evidenceUnits, topic)
   const prompt = createPrompt(topic, agentCount, selectedEvidence, sources, locale)
+  await onProgress?.('distill-memory-personas')
   const result = await chatCompletionJSON<RawSynthesisResult>(
     [{ role: 'user', content: prompt }],
-    { temperature: 0.35, maxTokens: 7000, model }
+    { temperature: 0.35, maxTokens: 7000, model, providerConfig }
   )
 
   const evidenceMap = new Map(selectedEvidence.map((unit) => [unit.id, unit]))
@@ -324,7 +340,7 @@ export async function synthesizePersonasFromEvidence({
     triggerKeywords: agent.triggerKeywords || [],
     frictionTopics: agent.frictionTopics || [],
     tags: agent.tags || [],
-    engagementCurve: agent.engagementCurve || 'steady',
+    engagementCurve: normalizeEngagementCurve(agent.engagementCurve),
     sourceSummary: agent.sourceSummary || '',
     dataGroundingScore: normalizeScore(agent.dataGroundingScore, 65),
     evidence: normalizeEvidence(agent.evidence, evidenceMap),

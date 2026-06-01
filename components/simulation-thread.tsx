@@ -51,6 +51,7 @@ const COPY = {
 export function SimulationThread() {
   const messages = useSimulationStore((s) => s.messages)
   const agents = useSimulationStore((s) => s.agents)
+  const progress = useSimulationStore((s) => s.progress)
   const addMessage = useSimulationStore((s) => s.addMessage)
   const status = useSimulationStore((s) => s.status)
   const locale = useLocaleStore((s) => s.locale)
@@ -95,8 +96,13 @@ export function SimulationThread() {
     <div className="flex h-full flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">{copy.waiting}</p>
+          <div className="flex h-full items-center justify-center px-6 text-center">
+            <div className="max-w-md space-y-2">
+              <p className="text-sm text-foreground/80">{progress?.label || copy.waiting}</p>
+              {progress?.detail && (
+                <p className="text-xs leading-relaxed text-muted-foreground">{progress.detail}</p>
+              )}
+            </div>
           </div>
         )}
         {messages.map((msg) => (
@@ -176,7 +182,14 @@ export function SimulationThread() {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs">
               <span className="animate-pulse">...</span>
             </div>
-            <span className="text-xs text-muted-foreground">{copy.thinking}</span>
+            <div className="space-y-0.5">
+              <span className="block text-xs text-muted-foreground">{progress?.label || copy.thinking}</span>
+              {progress?.detail && (
+                <span className="block max-w-xl text-[10px] leading-relaxed text-muted-foreground/80">
+                  {progress.detail}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

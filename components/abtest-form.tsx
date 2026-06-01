@@ -11,6 +11,7 @@ import { RichTextEditor } from '@/components/rich-text-editor'
 import { Stepper, Step } from '@/components/ui/stepper'
 import { marked } from 'marked'
 import { useLocaleStore } from '@/lib/locale-store'
+import { useBYOKStore } from '@/lib/byok-store'
 
 const RANDOM_CONCEPTS = [
   `# FlowMind AI写作助手 - 产品需求文档
@@ -356,6 +357,7 @@ export function ABTestForm() {
   const router = useRouter()
   const { concepts, segments, model, agentCount, setConcepts, setSegments, setModel, setAgentCount, addPersonas } = useABTestStore()
   const locale = useLocaleStore((s) => s.locale)
+  const getLLMConfig = useBYOKStore((s) => s.getRequestConfig)
   const copy = COPY[locale]
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -411,7 +413,7 @@ export function ABTestForm() {
       const res = await fetch('/api/abtest/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concepts, segments, model, agentCount, language: locale }),
+        body: JSON.stringify({ concepts, segments, model, agentCount, language: locale, llmConfig: getLLMConfig() }),
       })
 
       if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)

@@ -13,9 +13,11 @@ export function compileSingleHopPrompt(
   _phaseDirective: string,
   topic?: string,
   sessionProgress?: number,
-  locale: Locale = 'zh'
+  locale: Locale = 'zh',
+  topicBriefing?: string
 ): PromptPair {
-  const system = buildAgentSystemPrompt(agent, topic || (locale === 'en' ? 'discussion' : '讨论'), locale)
-  const user = buildAgentUserPrompt(agent, historyWindow, sessionProgress ?? 0.3, locale)
+  const normalizedTopic = topic || (locale === 'en' ? 'discussion' : '讨论')
+  const system = buildAgentSystemPrompt(agent, normalizedTopic, locale, topicBriefing)
+  const user = buildAgentUserPrompt(agent, historyWindow, sessionProgress ?? 0.3, locale, normalizedTopic, topicBriefing)
   return { system, user }
 }

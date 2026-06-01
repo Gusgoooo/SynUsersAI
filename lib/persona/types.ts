@@ -45,6 +45,23 @@ export interface MemoryProfile {
   decisionHeuristics: string[]
 }
 
+export type TopicExposureLevel = 'unaware' | 'aware' | 'informed' | 'expert'
+export type TopicResearchGrounding = 'web' | 'mixed' | 'user' | 'inferred'
+
+export interface TopicRelationProfile {
+  topic: string
+  familiarity: number
+  relevance: number
+  exposureLevel: TopicExposureLevel
+  relationSummary: string
+  likelyKnownFacts: string[]
+  likelyMisunderstandings: string[]
+  decisionAngles: string[]
+  visibleTraits: string[]
+  privateInstruction: string
+  researchGrounding: TopicResearchGrounding
+}
+
 export interface ActivatedMemory {
   label: string
   influence: string
@@ -69,6 +86,7 @@ export interface PersonaCore {
   dataGroundingScore?: number
   evidence?: PersonaEvidence[]
   memoryProfile?: MemoryProfile
+  topicRelation?: TopicRelationProfile
   engagementCurve: EngagementCurve
   ocean: OceanProfile
   biases: BiasProfile

@@ -1,14 +1,22 @@
-// Dual protocol LLM client
-// GPT: OpenAI protocol (chat/completions)
-// Gemini: Vertex protocol (generateContent)
+// Dual protocol LLM client with BYOK override support.
+// OpenAI-compatible: /chat/completions
+// Gemini: generateContent / streamGenerateContent
+
+import {
+  getGeminiModelUrl,
+  getOpenAIChatCompletionsUrl,
+  normalizeProviderConfig,
+  type LLMProviderConfig,
+  type LLMProviderConfigInput,
+} from '@/lib/llm/provider-config'
 
 const GPT_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions'
 const GPT_KEY = process.env.LLM_API_KEY || ''
-const GPT_MODEL = process.env.LLM_MODEL || 'gpt-5.4-2026-03-05'
+const GPT_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
 
 const GEMINI_BASE = process.env.GEMINI_API_URL || 'https://routify.alibaba-inc.com/protocol/vertex/v1beta'
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY || ''
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-pro-preview'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-pro'
 
 const EMBEDDING_DIM = 128
 
@@ -23,6 +31,80 @@ interface CompletionOptions {
   temperature?: number
   maxTokens?: number
   model?: ModelProvider
+  providerConfig?: LLMProviderConfigInput
+}
+
+function shouldUseGemini(model: ModelProvider | undefined, providerConfig?: LLMProviderConfigInput): boolean {
+  const normalized = normalizeProviderConfig(providerConfig)
+  return normalized?.protocol === 'gemini' || (!normalized && model === 'gemini')
+}
+
+function resolveOpenAIConfig(providerConfig?: LLMProviderConfigInput): {
+  url: string
+  key: string
+  model: string
+} {
+  const normalized = normalizeProviderConfig(providerConfig)
+  if (normalized?.protocol === 'openai-compatible') {
+    return {
+      url: getOpenAIChatCompletionsUrl(normalized.baseUrl),
+      key: normalized.apiKey,
+      model: normalized.model,
+    }
+  }
+
+  return {
+    url: GPT_URL,
+    key: GPT_KEY,
+    model: GPT_MODEL,
+  }
+}
+
+function resolveGeminiConfig(providerConfig?: LLMProviderConfigInput): LLMProviderConfig {
+  const normalized = normalizeProviderConfig(providerConfig)
+  if (normalized?.protocol === 'gemini') return normalized
+
+  return {
+    enabled: true,
+    protocol: 'gemini',
+    apiKey: GEMINI_KEY,
+    baseUrl: GEMINI_BASE,
+    model: GEMINI_MODEL,
+  }
+}
+
+function buildGeminiHeaders(apiKey: string, url: string): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (url.includes('routify.alibaba-inc.com')) {
+    headers['x-goog-api-key'] = apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`
+    return headers
+  }
+  if (apiKey.startsWith('Bearer ')) {
+    headers.Authorization = apiKey
+  } else {
+    headers['x-goog-api-key'] = apiKey
+  }
+  return headers
+}
+
+function buildOpenAIHeaders(apiKey: string, url: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  }
+
+  if (url.includes('openrouter.ai')) {
+    headers['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://github.com/Gusgoooo/synusersAI'
+    headers['X-Title'] = process.env.NEXT_PUBLIC_APP_NAME || 'SynUsersAI'
+  }
+
+  return headers
+}
+
+function sanitizeProviderError(text: string, apiKey: string): string {
+  let cleaned = text
+  if (apiKey) cleaned = cleaned.split(apiKey).join('[redacted-api-key]')
+  return cleaned.replace(/sk-[A-Za-z0-9_-]{12,}/g, 'sk-[redacted]')
 }
 
 // ========== OpenAI Protocol ==========
@@ -30,20 +112,19 @@ interface CompletionOptions {
 async function chatCompletionOpenAI(
   messages: ChatMessage[],
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  providerConfig?: LLMProviderConfigInput
 ): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 150000)
+  const config = resolveOpenAIConfig(providerConfig)
 
   try {
-    const res = await fetch(GPT_URL, {
+    const res = await fetch(config.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${GPT_KEY}`,
-      },
+      headers: buildOpenAIHeaders(config.key, config.url),
       body: JSON.stringify({
-        model: GPT_MODEL,
+        model: config.model,
         messages,
         temperature,
         max_tokens: maxTokens,
@@ -53,7 +134,7 @@ async function chatCompletionOpenAI(
 
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`GPT API error ${res.status}: ${err}`)
+      throw new Error(`GPT API error ${res.status}: ${sanitizeProviderError(err, config.key)}`)
     }
 
     const data = await res.json()
@@ -95,10 +176,12 @@ const THINKING_OVERHEAD = 4096
 async function chatCompletionGemini(
   messages: ChatMessage[],
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  providerConfig?: LLMProviderConfigInput
 ): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 150000)
+  const config = resolveGeminiConfig(providerConfig)
 
   const { contents, systemInstruction } = toGeminiFormat(messages)
 
@@ -112,22 +195,19 @@ async function chatCompletionGemini(
   }
   if (systemInstruction) body.systemInstruction = systemInstruction
 
-  const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent`
+  const url = getGeminiModelUrl(config.baseUrl, config.model)
 
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': `Bearer ${GEMINI_KEY}`,
-      },
+      headers: buildGeminiHeaders(config.apiKey, url),
       body: JSON.stringify(body),
       signal: controller.signal,
     })
 
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`Gemini API error ${res.status}: ${err}`)
+      throw new Error(`Gemini API error ${res.status}: ${sanitizeProviderError(err, config.apiKey)}`)
     }
 
     const data = await res.json()
@@ -164,20 +244,19 @@ export interface StreamChunk {
 async function* streamOpenAI(
   messages: ChatMessage[],
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  providerConfig?: LLMProviderConfigInput
 ): AsyncGenerator<StreamChunk> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 150000)
+  const config = resolveOpenAIConfig(providerConfig)
 
   try {
-    const res = await fetch(GPT_URL, {
+    const res = await fetch(config.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${GPT_KEY}`,
-      },
+      headers: buildOpenAIHeaders(config.key, config.url),
       body: JSON.stringify({
-        model: GPT_MODEL,
+        model: config.model,
         messages,
         temperature,
         max_tokens: maxTokens,
@@ -188,7 +267,7 @@ async function* streamOpenAI(
 
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`GPT API error ${res.status}: ${err}`)
+      throw new Error(`GPT API error ${res.status}: ${sanitizeProviderError(err, config.key)}`)
     }
 
     const reader = res.body!.getReader()
@@ -233,10 +312,12 @@ async function* streamOpenAI(
 async function* streamGemini(
   messages: ChatMessage[],
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  providerConfig?: LLMProviderConfigInput
 ): AsyncGenerator<StreamChunk> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 150000)
+  const config = resolveGeminiConfig(providerConfig)
 
   const { contents, systemInstruction } = toGeminiFormat(messages)
 
@@ -250,22 +331,19 @@ async function* streamGemini(
   }
   if (systemInstruction) body.systemInstruction = systemInstruction
 
-  const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`
+  const url = getGeminiModelUrl(config.baseUrl, config.model, true)
 
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': `Bearer ${GEMINI_KEY}`,
-      },
+      headers: buildGeminiHeaders(config.apiKey, url),
       body: JSON.stringify(body),
       signal: controller.signal,
     })
 
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`Gemini stream error ${res.status}: ${err}`)
+      throw new Error(`Gemini stream error ${res.status}: ${sanitizeProviderError(err, config.apiKey)}`)
     }
 
     const reader = res.body!.getReader()
@@ -312,10 +390,10 @@ export function chatCompletionStream(
 ): AsyncGenerator<StreamChunk> {
   const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.4' } = options
 
-  if (model === 'gemini') {
-    return streamGemini(messages, temperature, maxTokens)
+  if (shouldUseGemini(model, options.providerConfig)) {
+    return streamGemini(messages, temperature, maxTokens, options.providerConfig)
   }
-  return streamOpenAI(messages, temperature, maxTokens)
+  return streamOpenAI(messages, temperature, maxTokens, options.providerConfig)
 }
 
 // ========== Unified Interface ==========
@@ -326,10 +404,10 @@ export async function chatCompletion(
 ): Promise<string> {
   const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.4' } = options
 
-  if (model === 'gemini') {
-    return chatCompletionGemini(messages, temperature, maxTokens)
+  if (shouldUseGemini(model, options.providerConfig)) {
+    return chatCompletionGemini(messages, temperature, maxTokens, options.providerConfig)
   }
-  return chatCompletionOpenAI(messages, temperature, maxTokens)
+  return chatCompletionOpenAI(messages, temperature, maxTokens, options.providerConfig)
 }
 
 export async function chatCompletionJSON<T>(

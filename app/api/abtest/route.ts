@@ -2,6 +2,7 @@ import { chatCompletionJSON, chatCompletionStream, type ModelProvider, type Stre
 import { computePersonaMetrics, computeAcceptance, aggregateScores, type ConceptAttributes, type PersonaMetrics, type AcceptanceScores } from '@/lib/engine/acceptance-model'
 import { languageInstruction, normalizeLocale, type Locale } from '@/lib/locale'
 import { normalizeBiases, normalizeOcean } from '@/lib/persona/defaults'
+import { parseRequestProviderConfig } from '@/lib/llm/request-config'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -82,8 +83,9 @@ const SCENARIO_PROMPTS_EN: Record<string, string> = {
 }
 
 export async function POST(req: Request) {
-  const { concepts, segments, dimensions, model = 'gpt-5.4', agentCount = 8, evalConfig, language = 'zh' } = await req.json()
+  const { concepts, segments, dimensions, model = 'gpt-5.4', agentCount = 8, evalConfig, language = 'zh', llmConfig } = await req.json()
   const locale = normalizeLocale(language)
+  const providerConfig = parseRequestProviderConfig(llmConfig)
   const config: EvalConfig = evalConfig || { scenario: 'friend', customScenario: '', decisionCriteria: '', hypothesis: '', protocol: 'sequential' }
   const scenarioSet = locale === 'en' ? SCENARIO_PROMPTS_EN : SCENARIO_PROMPTS
   const scenarioPrompt = config.scenario === 'custom' ? config.customScenario : (scenarioSet[config.scenario] || scenarioSet.friend)
@@ -96,12 +98,42 @@ export async function POST(req: Request) {
     await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
   }
 
+  function progressText(phase: 'attributes' | 'personas' | 'eval' | 'choice', detail?: string) {
+    const labels = locale === 'en'
+      ? {
+          attributes: 'LLM is analyzing concept attributes',
+          personas: 'LLM is generating segment personas',
+          eval: 'AI users are evaluating one concept',
+          choice: 'AI users are making forced choices',
+        }
+      : {
+          attributes: '大模型正在分析方案属性',
+          personas: '大模型正在生成细分人群画像',
+          eval: 'AI 用户正在代入画像评价方案',
+          choice: 'AI 用户正在做强制选择',
+        }
+    const details = locale === 'en'
+      ? {
+          attributes: 'Extracting price level, novelty, switching cost, social proof, and risk for each concept.',
+          personas: 'Creating budget, current solution, pain points, decision style, OCEAN, and bias profiles.',
+          eval: 'Combining deterministic acceptance scores with role-played qualitative reactions.',
+          choice: 'Comparing prior reactions and choosing one option under budget and attention constraints.',
+        }
+      : {
+          attributes: '拆解每个方案的价格水平、新颖度、迁移成本、社会验证和风险。',
+          personas: '生成预算、现有方案、痛点、决策风格、OCEAN 和偏差画像。',
+          eval: '把确定性的接受度模型与代入式定性反应结合起来。',
+          choice: '结合第一轮反应，在预算和注意力约束下只选一个方案。',
+        }
+    return { label: labels[phase], detail: detail || details[phase] }
+  }
+
   ;(async () => {
     try {
       // ═══════════════════════════════════════════
       // Phase 0: LLM 推断方案属性（一次性，固定）
       // ═══════════════════════════════════════════
-      await send('progress', { phase: 'attributes', current: 0, total: 1 })
+      await send('progress', { phase: 'attributes', current: 0, total: 1, ...progressText('attributes') })
 
       const conceptAttrsPrompt = locale === 'en'
         ? `You are a product analyst. Evaluate each concept on five normalized attributes from 0 to 1.
@@ -138,7 +170,7 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
           concepts: Array<{ id: string } & ConceptAttributes>
         }>(
           [{ role: 'user', content: conceptAttrsPrompt }],
-          { temperature: 0.3, maxTokens: 1024, model: model as ModelProvider }
+          { temperature: 0.3, maxTokens: 1024, model: model as ModelProvider, providerConfig }
         )
 
         for (let i = 0; i < (concepts as Concept[]).length; i++) {
@@ -173,6 +205,12 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
           segmentName: segment.name,
           current: si,
           total: segments.length,
+          ...progressText(
+            'personas',
+            locale === 'en'
+              ? `Generating ${agentCount} consumer personas for "${segment.name}".`
+              : `正在为「${segment.name}」生成 ${agentCount} 个消费者画像。`
+          ),
         })
 
         const conceptContext = (concepts as Concept[]).map((c, i) => `「${getConceptLabel(c, i, locale)}」：${formatConceptContent(c, locale).slice(0, 100)}`).join('\n')
@@ -239,7 +277,7 @@ Return JSON only: {"agents":[...]}`
 
         const result = await chatCompletionJSON<{ agents: GeneratedPersona[] }>(
           [{ role: 'user', content: prompt }],
-          { temperature: 0.9, maxTokens: 6000, model: model as ModelProvider }
+          { temperature: 0.9, maxTokens: 6000, model: model as ModelProvider, providerConfig }
         )
 
         const personas = (result.agents || []).map((a) => ({
@@ -284,6 +322,12 @@ Return JSON only: {"agents":[...]}`
               conceptName: concept.name,
               current: evalCount,
               total: totalEvals,
+              ...progressText(
+                'eval',
+                locale === 'en'
+                  ? `${persona.name} is evaluating "${getConceptLabel(concept, (concepts as Concept[]).indexOf(concept), locale)}" from their budget, pain points, and decision style.`
+                  : `${persona.name} 正在根据自己的预算、痛点和决策风格评价「${getConceptLabel(concept, (concepts as Concept[]).indexOf(concept), locale)}」。`
+              ),
             })
 
             // Deterministic quantitative scores
@@ -379,7 +423,7 @@ ${formatConceptContent(concept, locale)}
             try {
               qualitative = await chatCompletionJSON<typeof qualitative>(
                 [{ role: 'user', content: evalPrompt }],
-                { temperature: 0.8, maxTokens: 1200, model: model as ModelProvider }
+                { temperature: 0.8, maxTokens: 1200, model: model as ModelProvider, providerConfig }
               )
             } catch (e) {
               console.error(`[ABTest R1] ${persona.name} × ${concept.name}:`, e)
@@ -440,6 +484,12 @@ ${formatConceptContent(concept, locale)}
               segmentName: segment.name,
               current: choiceCount,
               total: totalChoices,
+              ...progressText(
+                'choice',
+                locale === 'en'
+                  ? `${persona.name} must choose one concept and reject the others with concrete reasons.`
+                  : `${persona.name} 必须选择一个方案，并给出放弃其他方案的具体理由。`
+              ),
             })
 
             const conceptSummaries = (concepts as Concept[]).map((c, idx) => {
@@ -499,7 +549,7 @@ ${conceptSummaries}
                 rejectionReasons: Record<string, string>
               }>(
                 [{ role: 'user', content: choicePrompt }],
-                { temperature: 0.6, maxTokens: 512, model: model as ModelProvider }
+                { temperature: 0.6, maxTokens: 512, model: model as ModelProvider, providerConfig }
               )
 
               const validIds = (concepts as Concept[]).map(c => c.id)

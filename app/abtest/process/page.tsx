@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useABTestStore, type ABTestPersona, type EvaluationResult, type ForcedChoiceResult } from '@/lib/abtest-store'
 import { useLocaleStore } from '@/lib/locale-store'
+import { useBYOKStore } from '@/lib/byok-store'
 
 interface LogEntry {
   id: string
@@ -19,6 +20,7 @@ export default function ABTestProcessPage() {
   const router = useRouter()
   const store = useABTestStore()
   const locale = useLocaleStore((s) => s.locale)
+  const getLLMConfig = useBYOKStore((s) => s.getRequestConfig)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [isDone, setIsDone] = useState(false)
@@ -58,7 +60,7 @@ export default function ABTestProcessPage() {
       const res = await fetch('/api/abtest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concepts, segments, dimensions, model, agentCount, evalConfig, language: locale }),
+        body: JSON.stringify({ concepts, segments, dimensions, model, agentCount, evalConfig, language: locale, llmConfig: getLLMConfig() }),
       })
 
       if (!res.ok) throw new Error(`API ${res.status}`)
@@ -103,17 +105,33 @@ export default function ABTestProcessPage() {
         const phase = data.phase as string
         const current = data.current as number
         const total = data.total as number
-        store.setProgress({ phase: phase as 'attributes' | 'personas' | 'eval' | 'choice', segmentName: data.segmentName as string | undefined, conceptName: data.conceptName as string | undefined, current, total })
+        store.setProgress({
+          phase: phase as 'attributes' | 'personas' | 'eval' | 'choice',
+          label: data.label as string | undefined,
+          detail: data.detail as string | undefined,
+          segmentName: data.segmentName as string | undefined,
+          conceptName: data.conceptName as string | undefined,
+          current,
+          total,
+        })
 
         if (phase === 'attributes') {
-          addLog({ type: 'system', content: locale === 'en' ? 'Analyzing concept attributes...' : '正在分析方案属性...' })
+          addLog({ type: 'system', content: (data.label as string | undefined) || (locale === 'en' ? 'Analyzing concept attributes...' : '正在分析方案属性...'), detail: data.detail as string | undefined })
         } else if (phase === 'personas') {
-          addLog({ type: 'system', content: locale === 'en' ? `Generating personas for "${data.segmentName}" (${current + 1}/${total})...` : `正在为「${data.segmentName}」生成用户画像 (${current + 1}/${total})...` })
+          addLog({ type: 'system', content: (data.label as string | undefined) || (locale === 'en' ? `Generating personas for "${data.segmentName}" (${current + 1}/${total})...` : `正在为「${data.segmentName}」生成用户画像 (${current + 1}/${total})...`), detail: data.detail as string | undefined })
         } else if (phase === 'eval') {
-          store.setProgress({ phase: 'eval', segmentName: data.segmentName as string, conceptName: data.conceptName as string, current, total })
+          store.setProgress({
+            phase: 'eval',
+            label: data.label as string | undefined,
+            detail: data.detail as string | undefined,
+            segmentName: data.segmentName as string,
+            conceptName: data.conceptName as string,
+            current,
+            total,
+          })
         } else if (phase === 'choice') {
           if (current === 1) {
-              addLog({ type: 'system', content: locale === 'en' ? '-- Round 2: Forced choice --' : '── 第二轮：强制选择 ──' })
+              addLog({ type: 'system', content: (data.label as string | undefined) || (locale === 'en' ? '-- Round 2: Forced choice --' : '── 第二轮：强制选择 ──'), detail: data.detail as string | undefined })
           }
         }
         break
@@ -193,11 +211,18 @@ export default function ABTestProcessPage() {
           <h1 className="text-xl font-semibold tracking-tight">{locale === 'en' ? 'Evaluation in Progress' : '评估进行中'}</h1>
           {progress && (
             <p className="text-xs text-muted-foreground mt-1">
-              {progress.phase === 'attributes' && (locale === 'en' ? 'Analyzing concept attributes...' : '分析方案属性...')}
-              {progress.phase === 'personas' && (locale === 'en' ? `Generating personas: ${progress.segmentName} (${progress.current + 1}/${progress.total})` : `生成画像：${progress.segmentName} (${progress.current + 1}/${progress.total})`)}
-              {progress.phase === 'eval' && (locale === 'en' ? `Evaluating: ${progress.segmentName} × ${progress.conceptName} (${progress.current}/${progress.total})` : `评估：${progress.segmentName} × ${progress.conceptName} (${progress.current}/${progress.total})`)}
-              {progress.phase === 'choice' && (locale === 'en' ? `Forced choice (${progress.current}/${progress.total})` : `强制选择 (${progress.current}/${progress.total})`)}
+              {progress.label || (
+                <>
+                  {progress.phase === 'attributes' && (locale === 'en' ? 'Analyzing concept attributes...' : '分析方案属性...')}
+                  {progress.phase === 'personas' && (locale === 'en' ? `Generating personas: ${progress.segmentName} (${progress.current + 1}/${progress.total})` : `生成画像：${progress.segmentName} (${progress.current + 1}/${progress.total})`)}
+                  {progress.phase === 'eval' && (locale === 'en' ? `Evaluating: ${progress.segmentName} × ${progress.conceptName} (${progress.current}/${progress.total})` : `评估：${progress.segmentName} × ${progress.conceptName} (${progress.current}/${progress.total})`)}
+                  {progress.phase === 'choice' && (locale === 'en' ? `Forced choice (${progress.current}/${progress.total})` : `强制选择 (${progress.current}/${progress.total})`)}
+                </>
+              )}
             </p>
+          )}
+          {progress?.detail && (
+            <p className="text-[11px] text-muted-foreground/80 mt-1">{progress.detail}</p>
           )}
           {progress && (
             <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
@@ -214,7 +239,10 @@ export default function ABTestProcessPage() {
           {logs.map((log) => (
             <div key={log.id} className="text-xs leading-relaxed">
               {log.type === 'system' && (
-                <p className="text-muted-foreground">{log.content}</p>
+                <div>
+                  <p className="text-muted-foreground">{log.content}</p>
+                  {log.detail && <p className="text-muted-foreground/70 ml-3 mt-0.5">{log.detail}</p>}
+                </div>
               )}
               {log.type === 'persona' && (
                 <div>

@@ -66,6 +66,8 @@ export interface AggregateResult {
 
 export interface ABTestProgress {
   phase: 'attributes' | 'personas' | 'eval' | 'choice'
+  label?: string
+  detail?: string
   segmentName?: string
   conceptName?: string
   current: number

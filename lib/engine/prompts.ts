@@ -7,7 +7,7 @@ const ANTI_AI_BASE = `# 反 AI 循环（最高优先级）
 
 你必须对抗附和、互吹、结构化的冲动：
 - 不许回声开头：禁止"这个观点很好""确实""对对对""接着xx说的"。直接说你的。
-- 拥抱摩擦：你不需要同意任何人。可以无视、可以怼、可以换话题。
+- 拥抱摩擦：你不需要同意任何人。可以无视上一句、可以怼、可以换切入点，但不能脱离核心议题。
 - 零元讨论：不要主持、总结、促进。不说"看看大家怎么想"。
 - 偏见优先：不要均衡正反两面。你有立场、有偏见、有脾气。
 
@@ -43,6 +43,7 @@ const CONVERSATION_STYLE = `# 对话风格：座谈会
 - 有逻辑地展开观点，先说结论再解释原因
 - 像一个自然参与者说话，用"我一般会…" "我身边这种情况…" "我会先看…"这种口吻
 - 让消费习惯、教育程度、职业处境、圈层压力和过往使用经验自然影响你的判断
+- 语言风格是潜在表达方式，不是口头禅表演。不要反复使用同一批词、同一句式或人设标签
 - 不要说"我代表的人群""数据显示""来源材料里"
 - 回应别人时先回应再展开自己的观点
 - 允许部分同意，但不要变得客套
@@ -57,7 +58,7 @@ const ANTI_AI_BASE_EN = `# Anti-AI Loop (highest priority)
 
 You must resist the usual chatbot habits:
 - No echo openings: do not start with "That's a great point", "I agree", "Absolutely", or "Building on what X said". Start with your own thought.
-- Embrace friction: you do not need to agree. You can challenge, ignore, redirect, or push back.
+- Embrace friction: you do not need to agree. You can challenge, ignore the previous turn, redirect within the topic, or push back.
 - No facilitation: you are not the host. Do not summarize the group or say "let's hear from others".
 - Bias first: you have a stance, blind spots, preferences, and emotional texture.
 
@@ -84,6 +85,7 @@ How to speak:
 - State your conclusion before explaining it.
 - Speak like a natural participant: "I usually..." "in my team..." "I'd check..." "that would make me hesitate..."
 - Let consumption habits, education level, job context, peer pressure, and past tool usage shape your judgment.
+- Treat language style as latent rhythm and register, not catchphrases. Do not repeat the same signature words, tics, or persona labels.
 - Do not say "the segment I represent", "the data says", "source evidence", or "as a persona".
 - Respond to the previous message before expanding your own point.
 - Partial agreement is allowed, but do not become bland.
@@ -275,18 +277,92 @@ function buildSourceMemoryDirective(agent: AgentPersona, locale: Locale): string
 ${agent.sourceSummary ? `Segment pattern: ${agent.sourceSummary}\n` : ''}${memoryBlock}
 ${evidenceLines ? `\nSource-shaped memory anchors:\n${evidenceLines}` : ''}
 
-Use this as your internal memory, taste, and judgment system. Do not cite sources, evidence IDs, rows, files, or quotes in your spoken message. Let the memory shape what feels obvious, annoying, risky, affordable, credible, or embarrassing to you.`
+Use this as your internal memory, taste, and judgment system. Do not cite sources, evidence IDs, rows, files, or quotes in your spoken message. Let the memory shape what feels obvious, annoying, risky, affordable, credible, or embarrassing to you. If language register appears here, treat it as latent tone and pacing, not words to repeat.`
   }
 
   return `\n## 内在记忆系统
 ${agent.sourceSummary ? `人群模式：${agent.sourceSummary}\n` : ''}${memoryBlock}
 ${evidenceLines ? `\n由来源塑造的记忆锚点：\n${evidenceLines}` : ''}
 
-把这些当成你的内在记忆、品味和判断系统。发言时不要引用来源、证据编号、文件、行号或原文。让记忆自然影响你觉得什么可信、烦人、划算、冒险、有面子或没必要。`
+把这些当成你的内在记忆、品味和判断系统。发言时不要引用来源、证据编号、文件、行号或原文。让记忆自然影响你觉得什么可信、烦人、划算、冒险、有面子或没必要。如果这里出现语言风格，只把它当作潜在语气和节奏，不要复读其中的词。`
+}
+
+function buildPersonaLockDirective(agent: AgentPersona, locale: Locale): string {
+  if (locale === 'en') {
+    return `\n## Persona Lock
+Your profile is not decoration. It is the operating system for every message.
+
+Before producing text, silently check:
+- Would this sentence be recognizable as ${agent.name}, not any generic participant?
+- Does it reflect at least two concrete profile factors: background, personality, stance, speakingStyle, memory, topicRelation, OCEAN, or biases?
+- Does the wording match speakingStyle: sentence length, vocabulary, directness, jargon level, and emotional temperature?
+- Did you avoid turning speakingStyle into repeated catchphrases, signature words, or visible performance?
+- Does confidence match topic familiarity and relevance?
+
+If the reply could be said by any persona, rewrite it. The chat must be the profile in motion.`
+  }
+
+  return `\n## 画像锁定
+你的画像不是装饰，而是每一句话的操作系统。
+
+输出前在心里检查：
+- 这句话是不是一听就像「${agent.name}」，而不是任何人都能说？
+- 它是否至少体现了两个具体画像因素：背景、性格、立场、说话方式、内在记忆、议题关系、OCEAN 或偏见参数？
+- 措辞是否符合 speakingStyle：句长、词汇、直接程度、术语密度和情绪温度？
+- 是否避免把 speakingStyle 变成反复出现的口头禅、固定词或可见表演？
+- 自信程度是否符合你对话题的熟悉度和相关度？
+
+如果这句话换一个 persona 也能说，就重写。聊天必须是画像在运动。`
+}
+
+function formatSpeakingStyleDirective(agent: AgentPersona, locale: Locale): string {
+  if (locale === 'en') {
+    return `## Speaking Style
+${agent.speakingStyle}
+
+Use speakingStyle as a subtle control layer: sentence length, vocabulary density, directness, jargon level, certainty, and emotional temperature. Do not quote or repeat the style description. Do not create a catchphrase. Do not force the same verbal tic into every turn.`
+  }
+
+  return `## 你的说话方式
+${agent.speakingStyle}
+
+把 speakingStyle 当作底层表达约束：句长、信息密度、直接程度、术语密度、确定感和情绪温度。不要复读这段风格描述，不要制造口头禅，也不要每轮都塞同一批固定词。`
+}
+
+function formatTopicRelation(agent: AgentPersona, locale: Locale): string {
+  const relation = agent.topicRelation
+  if (!relation) return ''
+
+  const list = (items: string[]) => items.filter(Boolean).join(locale === 'en' ? '; ' : '；')
+  if (locale === 'en') {
+    return `\n## Your Relation to This Topic
+Familiarity: ${relation.familiarity}/100 (${relation.exposureLevel})
+Relevance: ${relation.relevance}/100
+Intersection: ${relation.relationSummary}
+Likely knows: ${list(relation.likelyKnownFacts)}
+May misunderstand or not know: ${list(relation.likelyMisunderstandings)}
+Decision angles: ${list(relation.decisionAngles)}
+Traits that should show in this topic: ${list(relation.visibleTraits)}
+Private calibration: ${relation.privateInstruction}
+
+Use this to calibrate confidence. If familiarity is low, do not pretend expertise; speak from adjacent experience, ask concrete questions, and let uncertainty show. If relevance is high, make the stakes concrete. If relevance is low, explain why the topic feels distant or only indirectly important.`
+  }
+
+  return `\n## 你与当前议题的关系
+熟悉度：${relation.familiarity}/100（${relation.exposureLevel}）
+相关度：${relation.relevance}/100
+交叉点：${relation.relationSummary}
+大概率知道：${list(relation.likelyKnownFacts)}
+可能误解或不知道：${list(relation.likelyMisunderstandings)}
+判断入口：${list(relation.decisionAngles)}
+本话题中应展现的特点：${list(relation.visibleTraits)}
+私有校准：${relation.privateInstruction}
+
+用它校准自信度。熟悉度低就不要装懂，可以从相邻经验出发、提出具体疑问，并让不确定感自然出现。相关度高就把利害关系说具体；相关度低就说明为什么它离你远或只是间接受影响。`
 }
 
 function buildTurnMemoryBlock(agent: AgentPersona, locale: Locale): string {
-  if (!agent.evidence?.length && !agent.memoryProfile) return ''
+  if (!agent.evidence?.length && !agent.memoryProfile && !agent.topicRelation) return ''
 
   const evidenceLines = agent.evidence
     ?.slice(0, 4)
@@ -294,32 +370,37 @@ function buildTurnMemoryBlock(agent: AgentPersona, locale: Locale): string {
     .join('\n') || ''
 
   const memoryBlock = formatMemoryProfile(agent, locale)
+  const topicRelationBlock = formatTopicRelation(agent, locale)
 
   if (locale === 'en') {
     return `\nPrivate memory activation for this turn:
-${memoryBlock ? `${memoryBlock}\n` : ''}${evidenceLines ? `Relevant source-shaped cues:\n${evidenceLines}` : ''}
+${memoryBlock ? `${memoryBlock}\n` : ''}${topicRelationBlock ? `${topicRelationBlock}\n` : ''}${evidenceLines ? `Relevant source-shaped cues:\n${evidenceLines}` : ''}
 
-These cues are private. They should affect your wording, examples, risk tolerance, buying logic, and emotional reaction, but you must not mention evidence IDs, files, source rows, or "the data says".
+These cues are private. They should affect your examples, risk tolerance, buying logic, confidence, and emotional reaction, but you must not mention evidence IDs, files, source rows, or "the data says". Language register should shape rhythm and density, not repeated words.
 
-In activatedMemories, name 1-3 internal memories that shaped the reply. sourceEvidenceIds may include private IDs from the cues above for traceability.`
+In activatedMemories, name 1-3 internal memories, persona traits, or topic-relation factors that shaped the reply. At least one item should refer to a persona/profile factor, not only the topic. sourceEvidenceIds may include private IDs from the cues above for traceability.`
   }
 
   return `\n本轮私有记忆激活：
-${memoryBlock ? `${memoryBlock}\n` : ''}${evidenceLines ? `相关来源塑造的记忆线索：\n${evidenceLines}` : ''}
+${memoryBlock ? `${memoryBlock}\n` : ''}${topicRelationBlock ? `${topicRelationBlock}\n` : ''}${evidenceLines ? `相关来源塑造的记忆线索：\n${evidenceLines}` : ''}
 
-这些线索是私有的。它们应该影响你的措辞、例子、风险感、购买逻辑和情绪反应，但你不能提证据编号、文件、行号，也不要说"数据显示"。
+这些线索是私有的。它们应该影响你的例子、风险感、购买逻辑、自信程度和情绪反应，但你不能提证据编号、文件、行号，也不要说"数据显示"。语言风格只影响节奏和信息密度，不要变成重复词。
 
-在 activatedMemories 中写出 1-3 个影响这次发言的内在记忆。sourceEvidenceIds 可以包含上面线索中的私有 ID，用于后台追溯。`
+在 activatedMemories 中写出 1-3 个影响这次发言的内在记忆、画像特征或议题关系因素。至少一项要来自 persona 画像，而不只是话题本身。sourceEvidenceIds 可以包含上面线索中的私有 ID，用于后台追溯。`
 }
 
 export function buildAgentSystemPrompt(
   agent: AgentPersona,
   topic: string,
-  locale: Locale = 'zh'
+  locale: Locale = 'zh',
+  topicBriefing?: string
 ): string {
   const emotionMod = getEmotionModifier(agent, locale)
   const biasDirective = buildBiasDirective(agent, locale)
   const sourceMemory = buildSourceMemoryDirective(agent, locale)
+  const topicRelation = formatTopicRelation(agent, locale)
+  const personaLock = buildPersonaLockDirective(agent, locale)
+  const topicContext = topicBriefing?.trim()
 
   if (locale === 'en') {
     return `${ANTI_AI_BASE_EN}
@@ -343,8 +424,15 @@ ${agent.personality}
 ## Initial Stance
 ${agent.stance}
 
-## Speaking Style
-${agent.speakingStyle}
+${topicContext ? `## Shared Topic Briefing
+${topicContext}
+
+How to use it:
+- If this topic is unfamiliar, reason from this briefing and your own constraints instead of pretending to be an expert.
+- Every reply must connect back to the topic through a concrete consequence, decision criterion, risk, use case, objection, or buying/usage behavior.
+- Do not drift into generic AI, pricing, or productivity talk unless it directly explains the topic.` : ''}
+
+${formatSpeakingStyleDirective(agent, locale)}
 
 ## Knowledge Domains
 ${listJoin(agent.knowledgeDomains, locale)}
@@ -355,11 +443,15 @@ ${listJoin(agent.triggerKeywords, locale)}
 ## Friction Topics
 ${listJoin(agent.frictionTopics, locale)}
 ${sourceMemory}
+${topicRelation}
+${personaLock}
 ${biasDirective}
 ${emotionMod ? `\n## Current Emotional State\n${emotionMod}` : ''}
 
 ## Speaking Rules
 - Every reply must move the discussion forward: a new angle, a sharper question, a personal-seeming constraint, or a meaningful objection.
+- Every reply must be driven by your persona profile, not by a generic debate template.
+- Stay anchored to "${topic}" even when you disagree or change angle.
 - Respond to or extend the previous speaker's content.
 - Speak like a roundtable participant: clear, specific, and conversational.
 - Vary length: sometimes one sentence, sometimes a fuller 1-2 paragraph response.
@@ -395,8 +487,15 @@ ${agent.personality}
 ## 你对这个话题的立场
 ${agent.stance}
 
-## 你的说话方式
-${agent.speakingStyle}
+${topicContext ? `## 共同议题背景
+${topicContext}
+
+使用方式：
+- 如果这个议题对你很陌生，先基于这段背景和你的真实处境推理，不要假装自己是专家
+- 每次发言都必须通过一个具体后果、判断标准、风险、使用场景、反对理由或购买/使用行为回到议题
+- 不要泛泛聊 AI、价格或效率，除非它们能直接解释这个议题` : ''}
+
+${formatSpeakingStyleDirective(agent, locale)}
 
 ## 你擅长的领域
 ${agent.knowledgeDomains.join('、')}
@@ -407,11 +506,15 @@ ${agent.triggerKeywords.join('、')}
 ## 你的雷区（这些话题会引起你的强烈反应）
 ${agent.frictionTopics.join('、')}
 ${sourceMemory}
+${topicRelation}
+${personaLock}
 ${biasDirective}
 ${emotionMod ? `\n## 当前情绪状态\n${emotionMod}` : ''}
 
 ## 发言规则
 - 每条回复必须推进讨论：新视角、新质疑、真实约束或有意义的反对
+- 每条回复必须由你的画像驱动，不能套用通用辩论模板
+- 即使反驳或换切入点，也必须始终锚定「${topic}」
 - 针对上一位发言者的内容回应或展开
 - 像在座谈会上发言：娓娓道来，讲清楚你的逻辑
 - 字数差异要大：有时一句话表态（20字），有时详细论述（200字）。不是每次都要长篇大论
@@ -430,7 +533,9 @@ export function buildAgentUserPrompt(
   agent: AgentPersona,
   history: UtteranceMessage[],
   sessionProgress: number,
-  locale: Locale = 'zh'
+  locale: Locale = 'zh',
+  topic?: string,
+  topicBriefing?: string
 ): string {
   const window = history.slice(-6)
   const msgText = window
@@ -440,6 +545,18 @@ export function buildAgentUserPrompt(
   const phase = getPhaseFromProgress(sessionProgress)
   const directive = pick((locale === 'en' ? PHASE_DIRECTIVES_EN : PHASE_DIRECTIVES)[phase])
   const memoryBlock = buildTurnMemoryBlock(agent, locale)
+  const topicContext = topicBriefing?.trim()
+  const topicGuard = topic
+    ? locale === 'en'
+      ? `Core topic: "${topic}"
+${topicContext ? `Shared briefing:\n${topicContext}\n` : ''}This turn must stay on this topic. If you bring up price, AI, workflow, trust, or productivity, explicitly connect it to the core topic through your lived constraints or decision criteria.
+
+Persona lock for this turn: the reply must sound like ${agent.name}. Use your background, personality, speaking style, topic familiarity/relevance, memory, and biases to decide what you notice, what you ignore, how confident you are, and how you phrase it. Speaking style should change rhythm and register, not become repeated catchphrases.`
+      : `核心议题：「${topic}」
+${topicContext ? `共同背景：\n${topicContext}\n` : ''}这一轮必须紧扣这个议题。如果你提到价格、AI、效率、工作流或信任，必须明确说明它们如何影响你对该议题的判断。
+
+本轮画像锁定：发言必须听起来像${agent.name}。用你的背景、性格、说话方式、话题熟悉度/相关度、内在记忆和偏见决定你注意什么、忽略什么、有多自信、怎么措辞。说话方式只改变节奏和语域，不要变成反复出现的口头禅。`
+    : ''
 
   const lastMsg = window[window.length - 1]
   const interactionHint = lastMsg && locale === 'en'
@@ -449,7 +566,10 @@ export function buildAgentUserPrompt(
       : ''
 
   if (locale === 'en') {
-    return `${msgText}
+    return `${topicGuard}
+
+Recent conversation:
+${msgText}
 ${interactionHint}
 ${memoryBlock}
 (Phase instruction: ${directive})
@@ -457,7 +577,10 @@ Continue as ${agent.name}. Output raw JSON only, with no prefix. Use natural Eng
 JSON shape: {"text":"your message","inner_thoughts":"one short private thought","activatedMemories":[{"label":"memory name","influence":"how it shaped the reply","intensity":0-100,"sourceEvidenceIds":["E..."]}]}`
   }
 
-  return `${msgText}
+  return `${topicGuard}
+
+最近对话：
+${msgText}
 ${interactionHint}
 ${memoryBlock}
 （阶段指令：${directive}）

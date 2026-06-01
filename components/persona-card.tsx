@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import type { SimAgent } from '@/lib/simulation-store'
 import { useLocaleStore } from '@/lib/locale-store'
+import type { MemoryProfile, TopicExposureLevel, TopicResearchGrounding } from '@/lib/persona/types'
 
 interface PersonaCardProps {
   agent: SimAgent
@@ -62,6 +63,36 @@ const BIAS_ITEMS = {
   ],
 } as const
 
+const EXPOSURE_LABELS: Record<'zh' | 'en', Record<TopicExposureLevel, string>> = {
+  zh: {
+    unaware: '陌生',
+    aware: '听过',
+    informed: '了解',
+    expert: '熟悉',
+  },
+  en: {
+    unaware: 'Unaware',
+    aware: 'Aware',
+    informed: 'Informed',
+    expert: 'Expert',
+  },
+}
+
+const GROUNDING_LABELS: Record<'zh' | 'en', Record<TopicResearchGrounding, string>> = {
+  zh: {
+    web: '联网',
+    mixed: '联网+人设',
+    user: '用户资料',
+    inferred: '人设推断',
+  },
+  en: {
+    web: 'Web',
+    mixed: 'Web + persona',
+    user: 'User material',
+    inferred: 'Persona-inferred',
+  },
+}
+
 const COPY = {
   zh: {
     personality: '性格：',
@@ -74,15 +105,35 @@ const COPY = {
     sourceSummary: '来源模式：',
     grounding: '记忆可信度',
     memoryTitle: '内在记忆系统',
+    summaryTitle: '摘要',
+    memorySubtitle: '来源材料已经被蒸馏为发言背后的判断结构',
+    grounded: '来源支撑',
+    inferred: '描述推断',
+    noMemory: '未生成记忆蒸馏',
+    semantic: '语义记忆',
+    episodic: '复合经历记忆',
     consumption: '消费习惯',
     cognitiveStyle: '认知方式',
+    socialIdentity: '社会身份',
+    emotionalTriggers: '情绪触发点',
     languageRegister: '语言风格',
+    decisionHeuristics: '决策捷径',
     sourceAnchors: '来源锚点',
-    viewParams: '查看完整认知参数',
-    dialogTitle: '认知科学参数',
+    sourceAnchorsHint: '后台用于追溯，不要求 AI 在聊天中直接引用',
+    viewParams: '展开更多',
+    dialogTitle: '人设详情与记忆蒸馏',
     oceanTitle: 'OCEAN 大五人格模型',
     biasesTitle: '认知偏见参数',
-    explanation: '这些参数会随对话进行实时变化，模拟人类在社交互动中的心理动态演化。情绪链（Chain-of-Feeling）系统基于认知失调实时更新情绪状态，OCEAN 人格决定情绪反应模式，偏见参数影响每次发言的认知过滤方向。',
+    mechanismTitle: '产品内如何生效',
+    mechanism: '聊天时会把这些记忆作为私有上下文激活，影响措辞、例子、风险感、购买逻辑和情绪反应；前台不强制引用来源，后台保留锚点和激活记录。',
+    detailsTitle: '基础画像',
+    topicRelationTitle: '当前议题交叉',
+    topicFamiliarity: '了解程度',
+    topicRelevance: '相关度',
+    likelyKnown: '大概率知道',
+    likelyMisread: '可能误解/不知道',
+    decisionAngles: '判断入口',
+    visibleTraits: '话题中显露的特点',
   },
   en: {
     personality: 'Personality: ',
@@ -95,16 +146,103 @@ const COPY = {
     sourceSummary: 'Source pattern: ',
     grounding: 'Memory grounding',
     memoryTitle: 'Internal Memory System',
+    summaryTitle: 'Summary',
+    memorySubtitle: 'Source material distilled into the judgment structure behind speech',
+    grounded: 'Source-backed',
+    inferred: 'Description-inferred',
+    noMemory: 'No memory distillation',
+    semantic: 'Semantic memory',
+    episodic: 'Composite experience memory',
     consumption: 'Consumption habits',
     cognitiveStyle: 'Cognitive style',
+    socialIdentity: 'Social identity',
+    emotionalTriggers: 'Emotional triggers',
     languageRegister: 'Language register',
+    decisionHeuristics: 'Decision heuristics',
     sourceAnchors: 'Source anchors',
-    viewParams: 'View full persona parameters',
-    dialogTitle: 'persona parameters',
+    sourceAnchorsHint: 'Used for backend traceability; the AI should not cite them in chat',
+    viewParams: 'Expand details',
+    dialogTitle: 'persona details and memory distillation',
     oceanTitle: 'OCEAN Big Five Model',
     biasesTitle: 'Cognitive Bias Parameters',
-    explanation: 'These parameters evolve during the conversation to approximate social and psychological dynamics. The emotion layer reacts to cognitive dissonance, OCEAN traits shape response patterns, and bias parameters influence how each agent filters new information.',
+    mechanismTitle: 'How it works in product',
+    mechanism: 'During chat, these memories are activated as private context. They shape wording, examples, risk tolerance, buying logic, and emotional reaction; the frontend avoids forced citations while backend anchors remain traceable.',
+    detailsTitle: 'Persona basics',
+    topicRelationTitle: 'Current Topic Fit',
+    topicFamiliarity: 'Familiarity',
+    topicRelevance: 'Relevance',
+    likelyKnown: 'Likely knows',
+    likelyMisread: 'May misunderstand/not know',
+    decisionAngles: 'Decision angles',
+    visibleTraits: 'Traits in this topic',
   },
+}
+
+function hasMemoryContent(memory?: MemoryProfile) {
+  if (!memory) return false
+  return Boolean(
+    asItems(memory.semanticMemory).length ||
+    asItems(memory.episodicCompositeMemory).length ||
+    asItems(memory.consumptionHabits).length ||
+    memory.educationCognitiveStyle ||
+    memory.socialIdentity ||
+    asItems(memory.emotionalTriggers).length ||
+    memory.languageRegister ||
+    asItems(memory.decisionHeuristics).length
+  )
+}
+
+function asItems(value: string | string[] | undefined) {
+  if (!value) return []
+  return Array.isArray(value) ? uniqueStrings(value) : uniqueStrings([value])
+}
+
+function uniqueStrings(items: Array<string | undefined | null>, limit?: number) {
+  const seen = new Set<string>()
+  const result: string[] = []
+
+  for (const item of items) {
+    const normalized = String(item || '').trim()
+    if (!normalized) continue
+    const key = normalized.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(normalized)
+    if (limit && result.length >= limit) break
+  }
+
+  return result
+}
+
+function uniqueEvidence<T extends { evidenceId?: string; quote?: string; sourceName?: string; locator?: string }>(items: T[] | undefined) {
+  const seen = new Set<string>()
+  const result: T[] = []
+
+  for (const item of items || []) {
+    const key = item.evidenceId || `${item.sourceName || ''}:${item.locator || ''}:${item.quote || ''}`
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    result.push(item)
+  }
+
+  return result
+}
+
+function MemorySection({ label, items }: { label: string; items: string[] }) {
+  if (items.length === 0) return null
+
+  return (
+    <div className="rounded-md border bg-background/60 p-2.5 space-y-1.5">
+      <p className="text-[10px] font-medium text-foreground/70">{label}</p>
+      <div className="space-y-1">
+        {items.map((item) => (
+          <p key={item} className="text-[11px] leading-relaxed text-muted-foreground">
+            {item}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function MiniBar({ value, color }: { value: number; color: string }) {
@@ -137,6 +275,25 @@ export function PersonaCard({ agent }: PersonaCardProps) {
   const oceanItems = OCEAN_ITEMS[locale]
   const biasItems = BIAS_ITEMS[locale]
   const memory = agent.memoryProfile
+  const topicRelation = agent.topicRelation
+  const hasMemory = hasMemoryContent(memory)
+  const isSourceBacked = Boolean(agent.evidence?.length || agent.sourceSummary || typeof agent.dataGroundingScore === 'number')
+  const groundingLabel = hasMemory ? (isSourceBacked ? copy.grounded : copy.inferred) : copy.noMemory
+  const tags = uniqueStrings(agent.tags, 4)
+  const knowledgeDomains = uniqueStrings(agent.knowledgeDomains)
+  const triggerKeywords = uniqueStrings(agent.triggerKeywords)
+  const frictionTopics = uniqueStrings(agent.frictionTopics)
+  const evidence = uniqueEvidence(agent.evidence)
+  const semanticMemories = asItems(memory?.semanticMemory)
+  const compositeMemories = asItems(memory?.episodicCompositeMemory)
+  const consumptionHabits = asItems(memory?.consumptionHabits)
+  const emotionalTriggers = asItems(memory?.emotionalTriggers)
+  const decisionHeuristics = asItems(memory?.decisionHeuristics)
+  const summaryItems = [
+    [copy.personality, agent.personality],
+    [copy.stance, agent.stance],
+    [copy.consumption, consumptionHabits[0]],
+  ].filter(([, item]) => Boolean(item)).slice(0, 2)
 
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3 flex flex-col h-full">
@@ -144,7 +301,7 @@ export function PersonaCard({ agent }: PersonaCardProps) {
         <div>
           <h3 className="font-semibold text-base">{agent.name}</h3>
           <div className="flex gap-1.5 mt-1.5 flex-wrap">
-            {agent.tags.map((tag) => (
+            {tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="text-[10px]">
                 {tag}
               </Badge>
@@ -160,6 +317,32 @@ export function PersonaCard({ agent }: PersonaCardProps) {
         {agent.background}
       </p>
 
+      {topicRelation && (
+        <div className="rounded-md border bg-background/50 px-2.5 py-2 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">{copy.topicRelationTitle}</p>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+              {GROUNDING_LABELS[locale][topicRelation.researchGrounding]}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-[10px] text-muted-foreground">{copy.topicFamiliarity}</span>
+              <MiniBar value={topicRelation.familiarity} color="bg-sky-500" />
+              <span className="text-[10px] font-mono text-muted-foreground">{topicRelation.familiarity}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-[10px] text-muted-foreground">{copy.topicRelevance}</span>
+              <MiniBar value={topicRelation.relevance} color="bg-emerald-500" />
+              <span className="text-[10px] font-mono text-muted-foreground">{topicRelation.relevance}</span>
+            </div>
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {EXPOSURE_LABELS[locale][topicRelation.exposureLevel]} · {topicRelation.relationSummary}
+          </p>
+        </div>
+      )}
+
       {(agent.sourceSummary || typeof agent.dataGroundingScore === 'number') && (
         <div className="rounded-md border bg-background/50 px-2.5 py-2 space-y-1">
           {typeof agent.dataGroundingScore === 'number' && (
@@ -171,90 +354,37 @@ export function PersonaCard({ agent }: PersonaCardProps) {
               <span className="text-[10px] font-mono text-muted-foreground">{agent.dataGroundingScore}</span>
             </div>
           )}
-          {agent.sourceSummary && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              <span className="text-foreground/70">{copy.sourceSummary}</span>{agent.sourceSummary}
-            </p>
-          )}
         </div>
       )}
 
-      <div className="space-y-1.5 text-xs">
-        <div>
-          <span className="text-muted-foreground">{copy.personality}</span>
-          <span>{agent.personality}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">{copy.stance}</span>
-          <span className="italic">{agent.stance}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">{copy.speakingStyle}</span>
-          <span>{agent.speakingStyle}</span>
-        </div>
+      <div className="space-y-1.5 text-xs border-t pt-2">
+        <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">{copy.summaryTitle}</p>
+        {summaryItems.map(([label, item]) => (
+          <p key={`${label}-${item}`} className="leading-relaxed">
+            <span className="text-muted-foreground">{label}</span>
+            <span>{item}</span>
+          </p>
+        ))}
       </div>
 
-      {memory && (
+      {hasMemory && memory && (
         <div className="border-t pt-2 space-y-1.5">
-          <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">{copy.memoryTitle}</p>
-          {memory.consumptionHabits.slice(0, 2).map((habit) => (
-            <p key={habit} className="text-[11px] leading-relaxed text-muted-foreground">
-              <span className="text-foreground/70">{copy.consumption}: </span>{habit}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">{copy.memoryTitle}</p>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+              {groundingLabel}
+            </Badge>
+          </div>
+          {[
+            [copy.consumption, consumptionHabits[0]],
+            [copy.languageRegister, memory.languageRegister],
+          ].filter(([, item]) => Boolean(item)).slice(0, 2).map(([label, item]) => (
+            <p key={`${label}-${item}`} className="text-[11px] leading-relaxed text-muted-foreground">
+              <span className="text-foreground/70">{label}: </span>{item}
             </p>
-          ))}
-          {memory.educationCognitiveStyle && (
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              <span className="text-foreground/70">{copy.cognitiveStyle}: </span>{memory.educationCognitiveStyle}
-            </p>
-          )}
-          {memory.languageRegister && (
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              <span className="text-foreground/70">{copy.languageRegister}: </span>{memory.languageRegister}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* OCEAN bars — always visible */}
-      {ocean && (
-        <div className="border-t pt-2 space-y-1">
-          <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">{copy.ocean}</p>
-          {oceanItems.map(({ key, label, color }) => (
-            <div key={key} className="flex items-center gap-2">
-              <span className="text-[9px] text-muted-foreground w-28 shrink-0">{label}</span>
-              <MiniBar value={ocean[key] ?? 50} color={color} />
-              <span className="text-[9px] font-mono text-muted-foreground w-5 text-right">{ocean[key] ?? 50}</span>
-            </div>
           ))}
         </div>
       )}
-
-      <div className="text-xs space-y-1.5 border-t pt-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-muted-foreground shrink-0">{copy.domains}</span>
-          {agent.knowledgeDomains.map((d) => (
-            <Badge key={d} variant="outline" className="text-[10px] px-1.5 py-0 border-blue-500/30 text-blue-400">
-              {d}
-            </Badge>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-muted-foreground shrink-0">{copy.triggers}</span>
-          {agent.triggerKeywords.map((kw) => (
-            <Badge key={kw} variant="outline" className="text-[10px] px-1.5 py-0">
-              {kw}
-            </Badge>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-muted-foreground shrink-0">{copy.friction}</span>
-          {agent.frictionTopics.map((ft) => (
-            <Badge key={ft} variant="outline" className="text-[10px] px-1.5 py-0 border-orange-500/30 text-orange-400">
-              {ft}
-            </Badge>
-          ))}
-        </div>
-      </div>
 
       {/* Full params modal */}
       <div className="border-t pt-2 mt-auto">
@@ -268,35 +398,98 @@ export function PersonaCard({ agent }: PersonaCardProps) {
             </DialogHeader>
 
             <div className="space-y-4 mt-2">
-              {memory && (
-                <div className="space-y-2.5">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {copy.memoryTitle}
-                  </h4>
-                  {[
-                    ...memory.semanticMemory.map((item) => [locale === 'en' ? 'Belief' : '稳定信念', item] as const),
-                    ...memory.episodicCompositeMemory.map((item) => [locale === 'en' ? 'Composite memory' : '复合经历', item] as const),
-                    ...memory.consumptionHabits.map((item) => [copy.consumption, item] as const),
-                    ...memory.emotionalTriggers.map((item) => [locale === 'en' ? 'Emotional trigger' : '情绪触发', item] as const),
-                    ...memory.decisionHeuristics.map((item) => [locale === 'en' ? 'Decision rule' : '决策捷径', item] as const),
-                  ].slice(0, 10).map(([label, item]) => (
-                    <div key={`${label}-${item}`} className="rounded-md bg-muted/40 px-2.5 py-2">
-                      <p className="text-[10px] font-medium text-foreground/70">{label}</p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">{item}</p>
-                    </div>
-                  ))}
-                  <div className="grid gap-2">
-                    {memory.socialIdentity && (
-                      <p className="text-[11px] text-muted-foreground">
-                        <span className="text-foreground/70">{locale === 'en' ? 'Social identity: ' : '社会身份：'}</span>{memory.socialIdentity}
-                      </p>
-                    )}
-                    {memory.languageRegister && (
-                      <p className="text-[11px] text-muted-foreground">
-                        <span className="text-foreground/70">{copy.languageRegister}: </span>{memory.languageRegister}
-                      </p>
-                    )}
+              <div className="rounded-md border bg-background/60 p-3 space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {copy.detailsTitle}
+                </h4>
+                {agent.sourceSummary && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="text-foreground/70">{copy.sourceSummary}</span>{agent.sourceSummary}
+                  </p>
+                )}
+                <div className="space-y-1.5 text-xs">
+                  <p>
+                    <span className="text-muted-foreground">{copy.personality}</span>
+                    <span>{agent.personality}</span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">{copy.stance}</span>
+                    <span className="italic">{agent.stance}</span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">{copy.speakingStyle}</span>
+                    <span>{agent.speakingStyle}</span>
+                  </p>
+                </div>
+              </div>
+
+              {topicRelation && (
+                <div className="rounded-md border bg-background/60 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {copy.topicRelationTitle}
+                    </h4>
+                    <Badge variant="outline" className="text-[10px] shrink-0">
+                      {GROUNDING_LABELS[locale][topicRelation.researchGrounding]}
+                    </Badge>
                   </div>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {EXPOSURE_LABELS[locale][topicRelation.exposureLevel]} · {topicRelation.relationSummary}
+                  </p>
+                  <DetailBar
+                    label={copy.topicFamiliarity}
+                    desc={topicRelation.privateInstruction}
+                    value={topicRelation.familiarity}
+                    color="bg-sky-500"
+                  />
+                  <DetailBar
+                    label={copy.topicRelevance}
+                    desc={topicRelation.decisionAngles.slice(0, 2).join(locale === 'en' ? ', ' : '、')}
+                    value={topicRelation.relevance}
+                    color="bg-emerald-500"
+                  />
+                  <div className="space-y-2">
+                    <MemorySection label={copy.likelyKnown} items={asItems(topicRelation.likelyKnownFacts)} />
+                    <MemorySection label={copy.likelyMisread} items={asItems(topicRelation.likelyMisunderstandings)} />
+                    <MemorySection label={copy.decisionAngles} items={asItems(topicRelation.decisionAngles)} />
+                    <MemorySection label={copy.visibleTraits} items={asItems(topicRelation.visibleTraits)} />
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {copy.memoryTitle}
+                    </h4>
+                    <p className="text-[10px] leading-relaxed text-muted-foreground">{copy.memorySubtitle}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    {groundingLabel}
+                  </Badge>
+                </div>
+                {typeof agent.dataGroundingScore === 'number' && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[10px] text-muted-foreground shrink-0">{copy.grounding}</span>
+                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${agent.dataGroundingScore}%` }} />
+                    </div>
+                    <span className="text-[10px] font-mono text-muted-foreground">{agent.dataGroundingScore}</span>
+                  </div>
+                )}
+              </div>
+
+              {hasMemory && memory && (
+                <div className="space-y-2.5">
+                  <MemorySection label={copy.semantic} items={semanticMemories} />
+                  <MemorySection label={copy.episodic} items={compositeMemories} />
+                  <MemorySection label={copy.consumption} items={consumptionHabits} />
+                  <MemorySection label={copy.cognitiveStyle} items={asItems(memory.educationCognitiveStyle)} />
+                  <MemorySection label={copy.socialIdentity} items={asItems(memory.socialIdentity)} />
+                  <MemorySection label={copy.emotionalTriggers} items={emotionalTriggers} />
+                  <MemorySection label={copy.languageRegister} items={asItems(memory.languageRegister)} />
+                  <MemorySection label={copy.decisionHeuristics} items={decisionHeuristics} />
                 </div>
               )}
 
@@ -330,18 +523,49 @@ export function PersonaCard({ agent }: PersonaCardProps) {
                 ))}
               </div>
 
-              <div className="border-t pt-3">
+              <div className="border-t pt-3 text-xs space-y-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-muted-foreground shrink-0">{copy.domains}</span>
+                  {knowledgeDomains.map((d) => (
+                    <Badge key={d} variant="outline" className="text-[10px] px-1.5 py-0 border-blue-500/30 text-blue-400">
+                      {d}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-muted-foreground shrink-0">{copy.triggers}</span>
+                  {triggerKeywords.map((kw) => (
+                    <Badge key={kw} variant="outline" className="text-[10px] px-1.5 py-0">
+                      {kw}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-muted-foreground shrink-0">{copy.friction}</span>
+                  {frictionTopics.map((ft) => (
+                    <Badge key={ft} variant="outline" className="text-[10px] px-1.5 py-0 border-orange-500/30 text-orange-400">
+                      {ft}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t pt-3 space-y-1">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {copy.mechanismTitle}
+                </h4>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  {copy.explanation}
+                  {copy.mechanism}
                 </p>
               </div>
 
-              {agent.evidence && agent.evidence.length > 0 && (
+              {evidence.length > 0 && (
                 <div className="border-t pt-3 space-y-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {copy.sourceAnchors}
                   </h4>
-                  {agent.evidence.map((item) => (
+                  <p className="text-[10px] leading-relaxed text-muted-foreground">{copy.sourceAnchorsHint}</p>
+                  {evidence.map((item) => (
                     <div key={item.evidenceId} className="rounded-md border bg-background/60 p-2 space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[10px] font-mono text-muted-foreground">{item.evidenceId}</span>

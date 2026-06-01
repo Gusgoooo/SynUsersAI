@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSimulationStore } from '@/lib/simulation-store'
+import { useSimulationStore, type SimAgent } from '@/lib/simulation-store'
 import { SimulationThread } from '@/components/simulation-thread'
 import { DynamicsPanel } from '@/components/dynamics-panel'
 import { Button } from '@/components/ui/button'
 import { useLocaleStore } from '@/lib/locale-store'
+import { useBYOKStore } from '@/lib/byok-store'
 
 const COPY = {
   zh: {
@@ -17,6 +18,8 @@ const COPY = {
     stop: '停止',
     report: '生成报告',
     viewReport: '查看报告 →',
+    connecting: '正在连接模拟引擎',
+    connectingDetail: '后端会逐步返回大模型正在执行的任务。',
   },
   en: {
     exit: '← Exit',
@@ -26,14 +29,17 @@ const COPY = {
     stop: 'Stop',
     report: 'Generate report',
     viewReport: 'View report →',
+    connecting: 'Connecting to the simulation engine',
+    connectingDetail: 'The backend will stream what the model is doing step by step.',
   },
 }
 
 export default function ChatPage() {
   const router = useRouter()
-  const { config, status, agents, messages, setStatus, addMessage, startStreamMessage, appendStreamChunk, finalizeStreamMessage, updateAgent, addImpulseScores, addConvergenceSnapshot, addCognitiveEvent, setReport } =
+  const { config, status, agents, messages, progress, setStatus, setProgress, addMessage, startStreamMessage, appendStreamChunk, finalizeStreamMessage, updateAgent, addImpulseScores, addConvergenceSnapshot, addCognitiveEvent, setReport } =
     useSimulationStore()
   const locale = useLocaleStore((s) => s.locale)
+  const getLLMConfig = useBYOKStore((s) => s.getRequestConfig)
   const copy = COPY[locale]
   const abortRef = useRef<AbortController | null>(null)
   const [roundCount, setRoundCount] = useState(0)
@@ -73,6 +79,11 @@ export default function ChatPage() {
     const abortController = new AbortController()
     abortRef.current = abortController
     setStatus('running')
+    setProgress({
+      step: 'connect',
+      label: copy.connecting,
+      detail: copy.connectingDetail,
+    })
 
     async function runSimulation() {
       const res = await fetch('/api/simulate', {
@@ -80,10 +91,12 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: config.topic,
+          topicContext: config.topicContext,
           mode: config.mode,
           duration: config.duration,
           model: config.model || 'gpt-5.4',
           language: config.locale || locale,
+          llmConfig: getLLMConfig(),
           personas: agents,
         }),
         signal: abortController.signal,
@@ -127,6 +140,13 @@ export default function ChatPage() {
 
     function handleSSEEvent(event: string, data: Record<string, unknown>) {
       switch (event) {
+        case 'progress':
+          setProgress({
+            step: String(data.step || 'progress'),
+            label: String(data.label || copy.connecting),
+            detail: data.detail ? String(data.detail) : undefined,
+          })
+          break
         case 'stream-start':
           startStreamMessage(
             data.id as string,
@@ -159,7 +179,7 @@ export default function ChatPage() {
           }
           break
         case 'state-update':
-          for (const agent of data.agents as { id: string; energy: number; accumulated_dissonance: number; stance: string; turns_since_last_speak: number }[]) {
+          for (const agent of data.agents as Array<Partial<SimAgent> & { id: string }>) {
             updateAgent(agent.id, agent)
           }
           break
@@ -177,9 +197,11 @@ export default function ChatPage() {
           break
         case 'error':
           console.error('Simulation error:', data.message)
+          setProgress(null)
           setStatus('completed')
           break
         case 'done':
+          setProgress(null)
           setStatus('completed')
           break
       }
@@ -197,17 +219,20 @@ export default function ChatPage() {
 
   function handleStop() {
     abortRef.current?.abort()
+    setProgress(null)
     setStatus('completed')
   }
 
   function handleGenerateReport() {
     abortRef.current?.abort()
+    setProgress(null)
     setStatus('completed')
     router.push('/report')
   }
 
   function handleExit() {
     abortRef.current?.abort()
+    setProgress(null)
     router.push('/')
   }
 
@@ -221,14 +246,20 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-screen p-4 gap-4">
       <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleExit}>
             {copy.exit}
           </Button>
-          <div>
-            <h1 className="font-semibold text-sm">{config.topic}</h1>
-            <p className="text-[11px] text-muted-foreground">
-              {status === 'running' ? copy.running(roundCount) : status === 'completed' ? copy.completed : copy.waiting}
+          <div className="min-w-0">
+            <h1 className="truncate font-semibold text-sm">{config.topic}</h1>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {status === 'running'
+                ? progress?.label
+                  ? `${copy.running(roundCount)} · ${progress.label}`
+                  : copy.running(roundCount)
+                : status === 'completed'
+                  ? copy.completed
+                  : copy.waiting}
             </p>
           </div>
         </div>

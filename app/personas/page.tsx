@@ -13,8 +13,6 @@ const COPY = {
     title: 'AI 人设预览',
     topic: '话题',
     agents: '位 Agent',
-    reconfigure: '重新配置',
-    start: '开始对话',
   },
   en: {
     empty: 'No personas generated yet',
@@ -22,8 +20,6 @@ const COPY = {
     title: 'AI Persona Preview',
     topic: 'Topic',
     agents: 'agents',
-    reconfigure: 'Reconfigure',
-    start: 'Start chat',
   },
 }
 
@@ -48,22 +44,14 @@ export default function PersonasPage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen px-6 pb-6 pt-24">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
+        <div className="mb-6">
+          <div className="min-w-0">
             <h1 className="text-xl font-semibold">{copy.title}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1 truncate">
               {copy.topic}: {config.topic} · {agents.length} {copy.agents} · {config.duration} min
             </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => router.push('/')}>
-              {copy.reconfigure}
-            </Button>
-            <Button onClick={() => router.push('/chat')}>
-              {copy.start}
-            </Button>
           </div>
         </div>
 

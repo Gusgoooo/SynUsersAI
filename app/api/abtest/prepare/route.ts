@@ -1,6 +1,7 @@
 import { chatCompletionJSON, type ModelProvider } from '@/lib/engine/llm'
 import { languageInstruction, normalizeLocale } from '@/lib/locale'
 import { normalizeBiases, normalizeOcean } from '@/lib/persona/defaults'
+import { parseRequestProviderConfig } from '@/lib/llm/request-config'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -30,8 +31,9 @@ interface GeneratedPersona {
 }
 
 export async function POST(req: Request) {
-  const { concepts, segments, model = 'gpt-5.4', agentCount = 8, language = 'zh' } = await req.json()
+  const { concepts, segments, model = 'gpt-5.4', agentCount = 8, language = 'zh', llmConfig } = await req.json()
   const locale = normalizeLocale(language)
+  const providerConfig = parseRequestProviderConfig(llmConfig)
 
   const conceptDescriptions = (concepts as ConceptInput[])
     .map((c, i) => `${locale === 'en' ? 'Concept' : '方案'}${String.fromCharCode(65 + i)}：\n${c.description}`)
@@ -171,7 +173,7 @@ Return JSON only: {"agents":[...]}`
     try {
       const result = await chatCompletionJSON<{ agents: GeneratedPersona[] }>(
         [{ role: 'user', content: prompt }],
-        { temperature: 0.9, maxTokens: 6000, model: model as ModelProvider }
+        { temperature: 0.9, maxTokens: 6000, model: model as ModelProvider, providerConfig }
       )
       return {
         segmentId: segment.id,
@@ -196,7 +198,7 @@ Return JSON only: {"agents":[...]}`
         segments: Array<{ name: string }>
       }>(
         [{ role: 'user', content: conceptPrompt }],
-        { temperature: 0.3, maxTokens: 2048, model: model as ModelProvider }
+        { temperature: 0.3, maxTokens: 2048, model: model as ModelProvider, providerConfig }
       ),
       ...personaPromises,
     ])

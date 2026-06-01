@@ -13,6 +13,7 @@ export type {
   MemoryProfile,
   OceanProfile,
   PersonaEvidence,
+  TopicRelationProfile,
 } from '@/lib/persona/types'
 
 export interface SimAgent extends PersonaCore {
@@ -58,6 +59,13 @@ export interface SimMessage {
   timestamp: number
 }
 
+export interface SimulationProgress {
+  step: string
+  label: string
+  detail?: string
+  timestamp: number
+}
+
 export interface EngineParams {
   moderatorInterval: number
   noiseRange: number
@@ -68,18 +76,20 @@ export interface EngineParams {
 
 interface SimulationState {
   status: 'idle' | 'generating' | 'previewing' | 'running' | 'completed'
-  config: { topic: string; mode: string; duration: number; model?: string; locale: Locale }
+  config: { topic: string; topicContext?: string; mode: string; duration: number; model?: string; locale: Locale }
   agents: SimAgent[]
   messages: SimMessage[]
   streamingMessages: Map<string, SimMessage>
+  progress: SimulationProgress | null
   impulseLog: ImpulseScore[][]
   convergenceLog: ConvergenceSnapshot[]
   cognitiveEvents: CognitiveEvent[]
   report: string | null
   engineParams: EngineParams
-  setConfig: (config: { topic: string; mode: string; duration: number; model?: string; locale: Locale }) => void
+  setConfig: (config: { topic: string; topicContext?: string; mode: string; duration: number; model?: string; locale: Locale }) => void
   setStatus: (status: SimulationState['status']) => void
   setAgents: (agents: SimAgent[]) => void
+  setProgress: (progress: Omit<SimulationProgress, 'timestamp'> | SimulationProgress | null) => void
   addMessage: (msg: SimMessage) => void
   startStreamMessage: (id: string, speakerId: string, speakerName: string, evidence?: PersonaEvidence[], usedEvidenceIds?: string[], activatedMemories?: ActivatedMemory[]) => void
   appendStreamChunk: (id: string, chunk: string) => void
@@ -107,6 +117,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   agents: [],
   messages: [],
   streamingMessages: new Map(),
+  progress: null,
   impulseLog: [],
   convergenceLog: [],
   cognitiveEvents: [],
@@ -115,6 +126,9 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setConfig: (config) => set({ config }),
   setStatus: (status) => set({ status }),
   setAgents: (agents) => set({ agents }),
+  setProgress: (progress) => set({
+    progress: progress ? { ...progress, timestamp: ('timestamp' in progress ? progress.timestamp : Date.now()) } : null,
+  }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   startStreamMessage: (id, speakerId, speakerName, evidence, usedEvidenceIds, activatedMemories) =>
     set((s) => {
@@ -154,7 +168,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     set((s) => ({ convergenceLog: [...s.convergenceLog, snapshot] })),
   addCognitiveEvent: (event) =>
     set((s) => ({ cognitiveEvents: [...s.cognitiveEvents, event] })),
-  setReport: (report) => set({ report, status: 'completed' }),
+  setReport: (report) => set({ report, status: 'completed', progress: null }),
   setEngineParams: (params) => set((s) => ({ engineParams: { ...s.engineParams, ...params } })),
-  reset: () => set({ status: 'idle', agents: [], messages: [], streamingMessages: new Map(), impulseLog: [], convergenceLog: [], cognitiveEvents: [], report: null, engineParams: DEFAULT_ENGINE_PARAMS }),
+  reset: () => set({ status: 'idle', agents: [], messages: [], streamingMessages: new Map(), progress: null, impulseLog: [], convergenceLog: [], cognitiveEvents: [], report: null, engineParams: DEFAULT_ENGINE_PARAMS }),
 }))
