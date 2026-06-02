@@ -547,7 +547,7 @@ export function ABTestForm() {
               <Select value={model} onValueChange={(v) => v && setModel(v)}>
                 <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-5.4">GPT-5.4</SelectItem>
+                  <SelectItem value="gpt-5.5">GPT-5.5</SelectItem>
                   <SelectItem value="gemini">Gemini 3 Pro</SelectItem>
                 </SelectContent>
               </Select>

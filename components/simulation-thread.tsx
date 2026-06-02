@@ -6,6 +6,8 @@ import { PersonaCard } from '@/components/persona-card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useLocaleStore } from '@/lib/locale-store'
 import { Brain } from 'lucide-react'
+import { PersonaNameLabel } from '@/components/persona-name-label'
+import { getPersonaDisplayName, getPersonaProfileTitle } from '@/lib/persona/names'
 
 // Must match AGENT_COLORS in dynamics-panel.tsx (hex) for consistent mapping
 export const AGENT_COLOR_HEX = [
@@ -19,6 +21,13 @@ function getInitial(name: string): string {
   if (name === 'Moderator') return 'M'
   if (name === 'You') return 'U'
   return name.charAt(0).toUpperCase()
+}
+
+function buildFallbackSpeaker(name: string) {
+  return {
+    displayName: getPersonaDisplayName({ name }),
+    profileTitle: getPersonaProfileTitle({ name }),
+  }
 }
 
 const MODERATOR_COLOR = '#6b7280'
@@ -59,6 +68,7 @@ export function SimulationThread() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const isActivelyRunning = status === 'running' || Boolean(progress)
 
   function getAgentColor(speakerId: string): string {
     if (speakerId === 'system') return MODERATOR_COLOR
@@ -92,16 +102,35 @@ export function SimulationThread() {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId)
 
+  function resolveSpeaker(speakerId: string, speakerName: string) {
+    if (speakerId === 'system' || speakerId === 'user') {
+      return { displayName: speakerName, profileTitle: '' }
+    }
+    const index = agents.findIndex((agent) => agent.id === speakerId)
+    if (index >= 0) {
+      const agent = agents[index]
+      return {
+        displayName: getPersonaDisplayName(agent, index),
+        profileTitle: getPersonaProfileTitle(agent),
+      }
+    }
+    return buildFallbackSpeaker(speakerName)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="flex h-full items-center justify-center px-6 text-center">
-            <div className="max-w-md space-y-2">
-              <p className="text-sm text-foreground/80">{progress?.label || copy.waiting}</p>
-              {progress?.detail && (
-                <p className="text-xs leading-relaxed text-muted-foreground">{progress.detail}</p>
+            <div className="max-w-md space-y-3">
+              {isActivelyRunning && (
+                <div className="flex justify-center">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-foreground/15 bg-background/40">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                  </span>
+                </div>
               )}
+              <p className="text-sm text-foreground/80">{progress?.label || copy.waiting}</p>
             </div>
           </div>
         )}
@@ -116,79 +145,81 @@ export function SimulationThread() {
               </div>
             </div>
           ) : (
-            <div key={msg.id} className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleAvatarClick(msg.speakerId)}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${msg.speakerId !== 'system' ? 'cursor-pointer hover:ring-2 hover:ring-foreground/20 transition-shadow' : ''}`}
-                style={{ backgroundColor: getAgentColor(msg.speakerId) }}
-                title={msg.speakerName}
-              >
-                {getInitial(msg.speakerName)}
-              </button>
-              <div className="max-w-[75%]">
-                <span className="text-[10px] text-muted-foreground mb-0.5 block">{msg.speakerName}</span>
-                <div className="rounded-lg bg-secondary px-4 py-2.5 text-sm">
-                  {msg.text}
-                </div>
-                {msg.activatedMemories && msg.activatedMemories.length > 0 && (
-                  <Dialog>
-                    <DialogTrigger className="mt-1.5 inline-flex h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-[10px] text-muted-foreground hover:text-foreground">
-                      <Brain className="h-3 w-3" />
-                      {copy.memory}
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle className="text-base">{copy.whyTitle}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-3">
-                        <div className="rounded-md bg-muted/50 p-3 text-sm leading-relaxed">
-                          {msg.text}
-                        </div>
-                        {msg.activatedMemories.map((memory, index) => (
-                          <div key={`${memory.label}-${index}`} className="rounded-md border p-3 space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs font-medium">{memory.label}</span>
-                              <span className="text-[10px] text-muted-foreground">{copy.intensity}: {memory.intensity}</span>
+            (() => {
+              const speaker = resolveSpeaker(msg.speakerId, msg.speakerName)
+              return (
+                <div key={msg.id} className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAvatarClick(msg.speakerId)}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${msg.speakerId !== 'system' ? 'cursor-pointer hover:ring-2 hover:ring-foreground/20 transition-shadow' : ''}`}
+                    style={{ backgroundColor: getAgentColor(msg.speakerId) }}
+                    title={speaker.profileTitle ? `${speaker.displayName} · ${speaker.profileTitle}` : speaker.displayName}
+                  >
+                    {getInitial(speaker.displayName)}
+                  </button>
+                  <div className="max-w-[75%]">
+                    <span className="mb-0.5 block max-w-full text-[10px] text-muted-foreground">
+                      <PersonaNameLabel displayName={speaker.displayName} profileTitle={speaker.profileTitle} />
+                    </span>
+                    <div className="rounded-lg bg-secondary px-4 py-2.5 text-sm">
+                      {msg.text}
+                    </div>
+                    {msg.activatedMemories && msg.activatedMemories.length > 0 && (
+                      <Dialog>
+                        <DialogTrigger className="mt-1.5 inline-flex h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-[10px] text-muted-foreground hover:text-foreground">
+                          <Brain className="h-3 w-3" />
+                          {copy.memory}
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle className="text-base">{copy.whyTitle}</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-3">
+                            <div className="rounded-md bg-muted/50 p-3 text-sm leading-relaxed">
+                              {msg.text}
                             </div>
-                            <p className="text-xs leading-relaxed text-muted-foreground">
-                              {copy.reason}: {memory.influence}
-                            </p>
-                          </div>
-                        ))}
-                        {msg.evidence && msg.evidence.length > 0 && (
-                          <div className="border-t pt-3 space-y-2">
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{copy.sourceAnchors}</p>
-                            {msg.evidence.map((item) => (
-                              <div key={item.evidenceId} className="rounded-md bg-muted/40 p-2">
-                                <p className="text-[10px] leading-relaxed text-muted-foreground">"{item.quote}"</p>
-                                <p className="mt-1 text-[9px] text-muted-foreground">
-                                  {item.sourceName} · {item.locator}
+                            {msg.activatedMemories.map((memory, index) => (
+                              <div key={`${memory.label}-${index}`} className="rounded-md border p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-xs font-medium">{memory.label}</span>
+                                  <span className="text-[10px] text-muted-foreground">{copy.intensity}: {memory.intensity}</span>
+                                </div>
+                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                  {copy.reason}: {memory.influence}
                                 </p>
                               </div>
                             ))}
+                            {msg.evidence && msg.evidence.length > 0 && (
+                              <div className="border-t pt-3 space-y-2">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{copy.sourceAnchors}</p>
+                                {msg.evidence.map((item) => (
+                                  <div key={item.evidenceId} className="rounded-md bg-muted/40 p-2">
+                                    <p className="text-[10px] leading-relaxed text-muted-foreground">"{item.quote}"</p>
+                                    <p className="mt-1 text-[9px] text-muted-foreground">
+                                      {item.sourceName} · {item.locator}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-            </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+                </div>
+              )
+            })()
           )
         ))}
         {status === 'running' && messages.length > 0 && (
           <div className="flex gap-2 items-center">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs">
-              <span className="animate-pulse">...</span>
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
             </div>
             <div className="space-y-0.5">
               <span className="block text-xs text-muted-foreground">{progress?.label || copy.thinking}</span>
-              {progress?.detail && (
-                <span className="block max-w-xl text-[10px] leading-relaxed text-muted-foreground/80">
-                  {progress.detail}
-                </span>
-              )}
             </div>
           </div>
         )}

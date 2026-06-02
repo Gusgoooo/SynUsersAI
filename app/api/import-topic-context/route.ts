@@ -1,4 +1,5 @@
 import { parsePopulationFiles } from '@/lib/population/parse'
+import { getPublicErrorMessage } from '@/lib/error-message'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -47,6 +48,6 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     console.error('[import-topic-context] Error:', err)
-    return Response.json({ error: String(err) }, { status: 500 })
+    return Response.json({ error: getPublicErrorMessage(err) }, { status: 500 })
   }
 }

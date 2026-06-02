@@ -11,7 +11,7 @@ import { useBYOKStore } from '@/lib/byok-store'
 
 const COPY = {
   zh: {
-    exit: '← 退出',
+    exit: '退出',
     running: (round: number) => `进行中 · 第 ${round} 轮`,
     completed: '已完成',
     waiting: '等待开始',
@@ -22,7 +22,7 @@ const COPY = {
     connectingDetail: '后端会逐步返回大模型正在执行的任务。',
   },
   en: {
-    exit: '← Exit',
+    exit: 'Exit',
     running: (round: number) => `Running · Round ${round}`,
     completed: 'Completed',
     waiting: 'Waiting to start',
@@ -38,6 +38,7 @@ export default function ChatPage() {
   const router = useRouter()
   const { config, status, agents, messages, progress, setStatus, setProgress, addMessage, startStreamMessage, appendStreamChunk, finalizeStreamMessage, updateAgent, addImpulseScores, addConvergenceSnapshot, addCognitiveEvent, setReport } =
     useSimulationStore()
+  const updateMessageMetadata = useSimulationStore((s) => s.updateMessageMetadata)
   const locale = useLocaleStore((s) => s.locale)
   const getLLMConfig = useBYOKStore((s) => s.getRequestConfig)
   const copy = COPY[locale]
@@ -94,7 +95,8 @@ export default function ChatPage() {
           topicContext: config.topicContext,
           mode: config.mode,
           duration: config.duration,
-          model: config.model || 'gpt-5.4',
+          durationTier: config.durationTier,
+          model: config.model || 'gpt-5.5',
           language: config.locale || locale,
           llmConfig: getLLMConfig(),
           personas: agents,
@@ -172,6 +174,14 @@ export default function ChatPage() {
             setRoundCount((c) => c + 1)
           }
           break
+        case 'message-metadata':
+          updateMessageMetadata(data.id as string, {
+            inner_thoughts: String(data.inner_thoughts || ''),
+            evidence: data.evidence as never[] | undefined,
+            usedEvidenceIds: data.usedEvidenceIds as string[] | undefined,
+            activatedMemories: data.activatedMemories as never[] | undefined,
+          })
+          break
         case 'utterance':
           addMessage(data as never)
           if (data.speakerId !== 'system') {
@@ -244,26 +254,24 @@ export default function ChatPage() {
   }, [status, router])
 
   return (
-    <div className="flex flex-col h-screen p-4 gap-4">
-      <header className="flex items-center justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleExit}>
+    <div className="flex h-screen flex-col gap-4 px-4 pb-4 pt-[72px]">
+      <header className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="truncate font-semibold text-sm">{config.topic}</h1>
+          <p className="mt-1 truncate text-[11px] text-muted-foreground">
+            {status === 'running'
+              ? progress?.label
+                ? `${copy.running(roundCount)} · ${progress.label}`
+                : copy.running(roundCount)
+              : status === 'completed'
+                ? copy.completed
+                : copy.waiting}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExit}>
             {copy.exit}
           </Button>
-          <div className="min-w-0">
-            <h1 className="truncate font-semibold text-sm">{config.topic}</h1>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {status === 'running'
-                ? progress?.label
-                  ? `${copy.running(roundCount)} · ${progress.label}`
-                  : copy.running(roundCount)
-                : status === 'completed'
-                  ? copy.completed
-                  : copy.waiting}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
           {status === 'running' && (
             <>
               <Button variant="outline" size="sm" onClick={handleStop}>

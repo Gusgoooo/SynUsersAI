@@ -64,7 +64,7 @@ export const useBYOKStore = create<BYOKState>((set, get) => ({
       baseUrl: protocol === 'gemini'
         ? 'https://generativelanguage.googleapis.com/v1beta'
         : 'https://api.openai.com/v1/chat/completions',
-      model: protocol === 'gemini' ? 'gemini-1.5-pro' : current.model || 'gpt-4o-mini',
+      model: protocol === 'gemini' ? 'gemini-1.5-pro' : current.model || 'gpt-5.5',
     }
     writeSessionConfig(config)
     set({ config })

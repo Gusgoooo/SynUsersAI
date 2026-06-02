@@ -12,7 +12,7 @@ import {
 
 const GPT_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions'
 const GPT_KEY = process.env.LLM_API_KEY || ''
-const GPT_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const GPT_MODEL = process.env.LLM_MODEL || 'gpt-5.5'
 
 const GEMINI_BASE = process.env.GEMINI_API_URL || 'https://routify.alibaba-inc.com/protocol/vertex/v1beta'
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY || ''
@@ -20,7 +20,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-pro'
 
 const EMBEDDING_DIM = 128
 
-export type ModelProvider = 'gpt-5.4' | 'gemini'
+export type ModelProvider = 'gpt-5.5' | 'gemini'
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -107,6 +107,16 @@ function sanitizeProviderError(text: string, apiKey: string): string {
   return cleaned.replace(/sk-[A-Za-z0-9_-]{12,}/g, 'sk-[redacted]')
 }
 
+function shouldUseMaxCompletionTokens(model: string): boolean {
+  return /(^|[/:-])gpt-5/i.test(model)
+}
+
+function buildOpenAITokenLimit(model: string, maxTokens: number): Record<string, number> {
+  return shouldUseMaxCompletionTokens(model)
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens }
+}
+
 // ========== OpenAI Protocol ==========
 
 async function chatCompletionOpenAI(
@@ -120,15 +130,17 @@ async function chatCompletionOpenAI(
   const config = resolveOpenAIConfig(providerConfig)
 
   try {
+    const body = {
+      model: config.model,
+      messages,
+      temperature,
+      ...buildOpenAITokenLimit(config.model, maxTokens),
+    }
+
     const res = await fetch(config.url, {
       method: 'POST',
       headers: buildOpenAIHeaders(config.key, config.url),
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
 
@@ -252,16 +264,18 @@ async function* streamOpenAI(
   const config = resolveOpenAIConfig(providerConfig)
 
   try {
+    const body = {
+      model: config.model,
+      messages,
+      temperature,
+      ...buildOpenAITokenLimit(config.model, maxTokens),
+      stream: true,
+    }
+
     const res = await fetch(config.url, {
       method: 'POST',
       headers: buildOpenAIHeaders(config.key, config.url),
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: true,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
 
@@ -388,7 +402,7 @@ export function chatCompletionStream(
   messages: ChatMessage[],
   options: CompletionOptions = {}
 ): AsyncGenerator<StreamChunk> {
-  const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.4' } = options
+  const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.5' } = options
 
   if (shouldUseGemini(model, options.providerConfig)) {
     return streamGemini(messages, temperature, maxTokens, options.providerConfig)
@@ -402,7 +416,7 @@ export async function chatCompletion(
   messages: ChatMessage[],
   options: CompletionOptions = {}
 ): Promise<string> {
-  const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.4' } = options
+  const { temperature = 0.7, maxTokens = 2048, model = 'gpt-5.5' } = options
 
   if (shouldUseGemini(model, options.providerConfig)) {
     return chatCompletionGemini(messages, temperature, maxTokens, options.providerConfig)

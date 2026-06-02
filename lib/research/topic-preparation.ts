@@ -24,9 +24,9 @@ interface RawTopicPreparation {
   personaRelations?: Array<Partial<TopicRelationProfile> & { personaId?: string; name?: string }>
 }
 
-function getTimeoutMs(envName: string, fallback: number): number {
+function getTimeoutMs(envName: string, defaultValue: number): number {
   const value = Number(process.env[envName])
-  if (!Number.isFinite(value) || value <= 0) return fallback
+  if (!Number.isFinite(value) || value <= 0) return defaultValue
   return Math.max(3000, Math.min(value, 120000))
 }
 
@@ -41,12 +41,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   })
 }
 
-function compactText(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : fallback
+function compactText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
 }
 
-function compactList(value: unknown, fallback: string[], limit = 4): string[] {
-  if (!Array.isArray(value)) return fallback
+function requiredText(value: unknown, field: string): string {
+  const text = compactText(value)
+  if (!text) throw new Error(`Topic preparation missing required field: ${field}`)
+  return text
+}
+
+function compactList(value: unknown, limit = 4): string[] {
+  if (!Array.isArray(value)) return []
   const seen = new Set<string>()
   const normalized: string[] = []
   for (const item of value) {
@@ -58,12 +64,18 @@ function compactList(value: unknown, fallback: string[], limit = 4): string[] {
     normalized.push(text)
     if (normalized.length >= limit) break
   }
-  return normalized.length ? normalized : fallback
+  return normalized
 }
 
-function clampScore(value: unknown, fallback: number): number {
+function requiredList(value: unknown, field: string, limit = 4): string[] {
+  const list = compactList(value, limit)
+  if (list.length === 0) throw new Error(`Topic preparation missing required list: ${field}`)
+  return list
+}
+
+function requiredScore(value: unknown, field: string): number {
   const numberValue = Number(value)
-  if (!Number.isFinite(numberValue)) return fallback
+  if (!Number.isFinite(numberValue)) throw new Error(`Topic preparation missing required score: ${field}`)
   return Math.max(0, Math.min(100, Math.round(numberValue)))
 }
 
@@ -85,54 +97,13 @@ function trimLongText(value: string, limit: number): string {
   return `${normalized.slice(0, limit).trim()}...`
 }
 
-export function fallbackTopicBriefing(topic: string, locale: Locale, topicContext = ''): TopicBriefing {
-  const contextSummary = topicContext.trim()
-    ? locale === 'en'
-      ? ` User-provided context says: ${trimLongText(topicContext, 220)}`
-      : ` 用户提供的背景是：${trimLongText(topicContext, 220)}`
-    : ''
-
-  if (locale === 'en') {
-    return {
-      background: `This discussion is about "${topic}" as a real user-facing choice, not as an abstract slogan.${contextSummary}`,
-      stakes: 'The useful question is how different people weigh value, cost, trust, effort, social pressure, and alternatives.',
-      plainLanguageFrame: 'Treat it as a concrete decision: would someone understand it, care about it, trust it, pay for it, and keep using it?',
-      focusQuestions: [
-        'What practical situation would make this matter?',
-        'What would make someone hesitate, reject it, or switch away?',
-        'What condition would change the decision?',
-      ],
-      boundaries: [
-        'Stay close to concrete user behavior and decision criteria.',
-        'Do not drift into generic AI, pricing, or productivity talk unless it directly explains this topic.',
-      ],
-    }
-  }
-
+function normalizeTopicBriefing(raw: Partial<TopicBriefing> | null | undefined): TopicBriefing {
   return {
-    background: `这场讨论不是泛泛评价概念，而是把「${topic}」放进真实用户会不会理解、会不会相信、会不会付费、会不会持续使用的情境里。${contextSummary}`,
-    stakes: '有价值的部分在于看清不同人如何权衡收益、成本、信任、麻烦程度、圈层压力和替代方案。',
-    plainLanguageFrame: '把它当成一次具体决策：这个东西对我有什么用，哪里让我犹豫，什么条件会改变我的判断。',
-    focusQuestions: [
-      '什么真实场景会让这个议题变得重要？',
-      '用户会因为什么迟疑、拒绝或转向替代方案？',
-      '哪些条件变化会让判断发生改变？',
-    ],
-    boundaries: [
-      '始终回到具体使用行为和决策标准。',
-      '不要泛泛聊 AI、价格或效率，除非能明确连接到这个议题。',
-    ],
-  }
-}
-
-function normalizeTopicBriefing(raw: Partial<TopicBriefing> | null | undefined, topic: string, locale: Locale, topicContext = ''): TopicBriefing {
-  const fallback = fallbackTopicBriefing(topic, locale, topicContext)
-  return {
-    background: compactText(raw?.background, fallback.background),
-    stakes: compactText(raw?.stakes, fallback.stakes),
-    plainLanguageFrame: compactText(raw?.plainLanguageFrame, fallback.plainLanguageFrame),
-    focusQuestions: compactList(raw?.focusQuestions, fallback.focusQuestions, 3),
-    boundaries: compactList(raw?.boundaries, fallback.boundaries, 3),
+    background: requiredText(raw?.background, 'briefing.background'),
+    stakes: requiredText(raw?.stakes, 'briefing.stakes'),
+    plainLanguageFrame: requiredText(raw?.plainLanguageFrame, 'briefing.plainLanguageFrame'),
+    focusQuestions: requiredList(raw?.focusQuestions, 'briefing.focusQuestions', 3),
+    boundaries: requiredList(raw?.boundaries, 'briefing.boundaries', 3),
   }
 }
 
@@ -152,100 +123,6 @@ Discussion boundaries: ${boundaries}`
 讨论边界：${boundaries}`
 }
 
-export function buildOpeningText(topic: string, briefing: TopicBriefing, locale: Locale): string {
-  const focus = briefing.focusQuestions.slice(0, 3)
-  if (locale === 'en') {
-    return [
-      `Today's topic is "${topic}". Before we debate it, let me set the context: ${briefing.background}`,
-      briefing.stakes,
-      `Keep three questions in mind: ${focus.join(' / ')}`,
-      'Let us start with quick introductions. Say who you are in relation to this topic, how familiar you are with it, what you instinctively care about, and one concern or expectation you bring into the discussion.',
-    ].join('\n\n')
-  }
-
-  return [
-    `今天的议题是「${topic}」。先把背景说清楚：${briefing.background}`,
-    briefing.stakes,
-    `接下来重点看三件事：${focus.join('；')}`,
-    '先从简短自我介绍开始。每个人说清楚自己和这个议题的关系、熟悉程度、第一反应里最在意什么，以及带着什么担心或期待进入讨论。',
-  ].join('\n\n')
-}
-
-function textOverlapScore(topic: string, topicContext: string, persona: AgentPersona): number {
-  const source = [
-    persona.background,
-    persona.stance,
-    persona.personality,
-    persona.speakingStyle,
-    persona.sourceSummary || '',
-    ...persona.tags,
-    ...persona.knowledgeDomains,
-    ...persona.triggerKeywords,
-    ...persona.frictionTopics,
-    ...(persona.memoryProfile?.semanticMemory || []),
-    ...(persona.memoryProfile?.consumptionHabits || []),
-    persona.memoryProfile?.educationCognitiveStyle || '',
-    persona.memoryProfile?.socialIdentity || '',
-  ].join(' ').toLocaleLowerCase()
-
-  const tokens = `${topic} ${topicContext}`
-    .toLocaleLowerCase()
-    .replace(/[^\w一-鿿]+/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length >= 2)
-
-  if (tokens.length === 0) return 0
-  const hits = tokens.filter((token) => source.includes(token)).length
-  return Math.min(35, Math.round((hits / tokens.length) * 35))
-}
-
-function fallbackRelation(persona: AgentPersona, topic: string, topicContext: string, locale: Locale, grounding: TopicResearchGrounding): TopicRelationProfile {
-  const overlap = textOverlapScore(topic, topicContext, persona)
-  const hasDomains = persona.knowledgeDomains.length > 0 ? 10 : 0
-  const hasSourceMemory = persona.memoryProfile || persona.sourceSummary ? 8 : 0
-  const familiarity = Math.min(85, 25 + overlap + hasDomains + hasSourceMemory)
-  const relevance = Math.min(90, 35 + overlap + Math.min(persona.triggerKeywords.length * 4, 16) + hasSourceMemory)
-  const exposureLevel = exposureFromFamiliarity(familiarity)
-
-  if (locale === 'en') {
-    return {
-      topic,
-      familiarity,
-      relevance,
-      exposureLevel,
-      relationSummary: `${persona.name} should approach this topic through their own background and constraints rather than as a generic expert.`,
-      likelyKnownFacts: topicContext.trim()
-        ? ['They can reason from their role, habits, adjacent experiences, and the user-provided topic material.']
-        : ['They can reason from their role, habits, and adjacent experiences.'],
-      likelyMisunderstandings: familiarity < 45 ? ['They may not know the exact terminology and should ask practical clarifying questions.'] : [],
-      decisionAngles: ['Practical value', 'trust and risk', 'cost or effort', 'available alternatives'],
-      visibleTraits: ['Calibrated confidence', 'personal-seeming constraints', 'non-generic judgment'],
-      privateInstruction: familiarity < 45
-        ? 'Do not pretend expertise. Speak from adjacent experience, ask concrete questions, and make uncertainty visible.'
-        : 'Use your background to make the topic concrete and show what would change your judgment.',
-      researchGrounding: grounding,
-    }
-  }
-
-  return {
-    topic,
-    familiarity,
-    relevance,
-    exposureLevel,
-    relationSummary: `${persona.name}应该从自己的背景、习惯和约束切入这个议题，而不是像泛泛的专家一样评价。`,
-    likelyKnownFacts: topicContext.trim()
-      ? ['可以基于自己的角色、消费习惯、工作或生活场景，以及用户提供的话题资料进行推理。']
-      : ['可以基于自己的角色、消费习惯、工作或生活场景进行推理。'],
-    likelyMisunderstandings: familiarity < 45 ? ['可能不熟悉精确术语，需要用具体问题确认到底在讨论什么。'] : [],
-    decisionAngles: ['实际价值', '信任与风险', '成本或精力', '替代方案'],
-    visibleTraits: ['自信度有校准', '会暴露真实约束', '判断不泛泛'],
-    privateInstruction: familiarity < 45
-      ? '不要假装懂。可以承认不熟，从相邻经验出发，提出具体疑问。'
-      : '用自己的背景把话题具体化，并说清什么条件会改变判断。',
-    researchGrounding: grounding,
-  }
-}
-
 function normalizeGrounding(hasWebResults: boolean, hasUserContext: boolean): TopicResearchGrounding {
   if (hasWebResults && hasUserContext) return 'mixed'
   if (hasWebResults) return 'web'
@@ -257,25 +134,23 @@ function normalizeRelation(
   raw: Partial<TopicRelationProfile> | undefined,
   persona: AgentPersona,
   topic: string,
-  topicContext: string,
-  locale: Locale,
   grounding: TopicResearchGrounding
 ): TopicRelationProfile {
-  const fallback = fallbackRelation(persona, topic, topicContext, locale, grounding)
-  const familiarity = clampScore(raw?.familiarity, fallback.familiarity)
-  const relevance = clampScore(raw?.relevance, fallback.relevance)
+  if (!raw) throw new Error(`Topic preparation missing relation for persona: ${persona.name}`)
+  const familiarity = requiredScore(raw.familiarity, `${persona.name}.familiarity`)
+  const relevance = requiredScore(raw.relevance, `${persona.name}.relevance`)
 
   return {
     topic,
     familiarity,
     relevance,
     exposureLevel: normalizeExposure(raw?.exposureLevel, familiarity),
-    relationSummary: compactText(raw?.relationSummary, fallback.relationSummary),
-    likelyKnownFacts: compactList(raw?.likelyKnownFacts, fallback.likelyKnownFacts, 4),
-    likelyMisunderstandings: compactList(raw?.likelyMisunderstandings, fallback.likelyMisunderstandings, 4),
-    decisionAngles: compactList(raw?.decisionAngles, fallback.decisionAngles, 4),
-    visibleTraits: compactList(raw?.visibleTraits, fallback.visibleTraits, 4),
-    privateInstruction: compactText(raw?.privateInstruction, fallback.privateInstruction),
+    relationSummary: requiredText(raw.relationSummary, `${persona.name}.relationSummary`),
+    likelyKnownFacts: requiredList(raw.likelyKnownFacts, `${persona.name}.likelyKnownFacts`, 4),
+    likelyMisunderstandings: compactList(raw.likelyMisunderstandings, 4),
+    decisionAngles: requiredList(raw.decisionAngles, `${persona.name}.decisionAngles`, 4),
+    visibleTraits: requiredList(raw.visibleTraits, `${persona.name}.visibleTraits`, 4),
+    privateInstruction: requiredText(raw.privateInstruction, `${persona.name}.privateInstruction`),
     researchGrounding: grounding,
   }
 }
@@ -358,8 +233,6 @@ export async function generateTopicPreparation(
 
   const hasUserContext = topicContext.trim().length > 0
   const grounding = normalizeGrounding(webContext.results.length > 0, hasUserContext)
-  const fallbackBriefing = fallbackTopicBriefing(topic, locale, topicContext)
-
   const systemPrompt = locale === 'en'
     ? `You are a senior user-research moderator and persona analyst.
 
@@ -483,27 +356,17 @@ ${formatPersonaSignals(personas, locale)}
         findRawRelation(raw.personaRelations, persona),
         persona,
         topic,
-        topicContext,
-        locale,
         grounding
       )
     }
 
     return {
-      briefing: normalizeTopicBriefing(raw.briefing, topic, locale, topicContext),
+      briefing: normalizeTopicBriefing(raw.briefing),
       personaRelations,
       webContext,
     }
   } catch (e) {
     console.error('[TopicPreparation] LLM failed:', e)
-    const personaRelations: Record<string, TopicRelationProfile> = {}
-    for (const persona of personas) {
-      personaRelations[persona.id] = fallbackRelation(persona, topic, topicContext, locale, grounding)
-    }
-    return {
-      briefing: fallbackBriefing,
-      personaRelations,
-      webContext,
-    }
+    throw new Error(locale === 'en' ? 'Topic preparation failed. No substitute topic profile was generated.' : '话题关系准备失败。系统不会生成替代话题画像。')
   }
 }

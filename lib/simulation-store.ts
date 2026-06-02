@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Locale } from '@/lib/locale'
+import type { RoundtableDurationTier } from '@/lib/roundtable-duration'
 import type {
   ActivatedMemory,
   PersonaCore,
@@ -20,6 +21,8 @@ export interface SimAgent extends PersonaCore {
   energy: number
   turns_since_last_speak: number
   accumulated_dissonance: number
+  previous_dissonance: number
+  current_belief_vector: number[]
   currentEmotion: string
   emotionIntensity: number
 }
@@ -74,9 +77,19 @@ export interface EngineParams {
   energyCostListener: number
 }
 
+export interface SimulationConfig {
+  topic: string
+  topicContext?: string
+  mode: string
+  duration: number
+  durationTier?: RoundtableDurationTier
+  model?: string
+  locale: Locale
+}
+
 interface SimulationState {
   status: 'idle' | 'generating' | 'previewing' | 'running' | 'completed'
-  config: { topic: string; topicContext?: string; mode: string; duration: number; model?: string; locale: Locale }
+  config: SimulationConfig
   agents: SimAgent[]
   messages: SimMessage[]
   streamingMessages: Map<string, SimMessage>
@@ -86,7 +99,7 @@ interface SimulationState {
   cognitiveEvents: CognitiveEvent[]
   report: string | null
   engineParams: EngineParams
-  setConfig: (config: { topic: string; topicContext?: string; mode: string; duration: number; model?: string; locale: Locale }) => void
+  setConfig: (config: SimulationConfig) => void
   setStatus: (status: SimulationState['status']) => void
   setAgents: (agents: SimAgent[]) => void
   setProgress: (progress: Omit<SimulationProgress, 'timestamp'> | SimulationProgress | null) => void
@@ -94,6 +107,7 @@ interface SimulationState {
   startStreamMessage: (id: string, speakerId: string, speakerName: string, evidence?: PersonaEvidence[], usedEvidenceIds?: string[], activatedMemories?: ActivatedMemory[]) => void
   appendStreamChunk: (id: string, chunk: string) => void
   finalizeStreamMessage: (id: string, text: string, evidence?: PersonaEvidence[], usedEvidenceIds?: string[], activatedMemories?: ActivatedMemory[]) => void
+  updateMessageMetadata: (id: string, updates: Partial<Pick<SimMessage, 'inner_thoughts' | 'evidence' | 'usedEvidenceIds' | 'activatedMemories'>>) => void
   updateAgent: (id: string, updates: Partial<SimAgent>) => void
   addImpulseScores: (scores: ImpulseScore[]) => void
   addConvergenceSnapshot: (snapshot: ConvergenceSnapshot) => void
@@ -113,7 +127,7 @@ const DEFAULT_ENGINE_PARAMS: EngineParams = {
 
 export const useSimulationStore = create<SimulationState>((set) => ({
   status: 'idle',
-  config: { topic: '', mode: 'generated', duration: 60, locale: 'zh' },
+  config: { topic: '', mode: 'generated', duration: 10, durationTier: 'medium', locale: 'zh' },
   agents: [],
   messages: [],
   streamingMessages: new Map(),
@@ -158,6 +172,10 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         messages: s.messages.map(m => m.id === id ? { ...m, text, evidence: evidence ?? m.evidence, usedEvidenceIds: usedEvidenceIds ?? m.usedEvidenceIds, activatedMemories: activatedMemories ?? m.activatedMemories } : m),
       }
     }),
+  updateMessageMetadata: (id, updates) =>
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+    })),
   updateAgent: (id, updates) =>
     set((s) => ({
       agents: s.agents.map((a) => (a.id === id ? { ...a, ...updates } : a)),

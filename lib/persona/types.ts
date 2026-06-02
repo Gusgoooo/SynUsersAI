@@ -74,6 +74,7 @@ export type EngagementCurve = 'steady' | 'fading' | 'warming' | 'burst' | 'errat
 export interface PersonaCore {
   id: string
   name: string
+  profileTitle?: string
   background: string
   personality: string
   stance: string

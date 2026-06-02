@@ -58,40 +58,28 @@ const GENERATION_FLOW_STEPS: Record<Locale, Record<GenerationFlowKind, FlowStep[
     ],
     imported: [
       {
-        id: 'validate-upload',
-        title: '检查上传文件',
-        detail: '确认 CSV、Excel、Word 或文本文件数量、大小与模型配置。',
+        id: 'prepare-source-data',
+        title: '解析来源数据',
+        detail: '检查上传文件、读取表格/文档/文本、切分来源锚点并筛选相关材料。',
         estimatedAt: 0,
-      },
-      {
-        id: 'parse-files',
-        title: '解析文件并切分来源锚点',
-        detail: '读取表格、文档和文本，把原始材料拆成可追溯的证据单元。',
-        estimatedAt: 3,
-      },
-      {
-        id: 'rank-evidence',
-        title: '筛选与话题最相关的材料',
-        detail: '用语义相似度和来源均衡策略选择最能支撑人设蒸馏的材料。',
-        estimatedAt: 8,
       },
       {
         id: 'distill-memory-personas',
         title: '大模型蒸馏人类式记忆系统',
         detail: '从来源材料中提炼语义记忆、复合经历、消费习惯、认知方式和语言风格。',
-        estimatedAt: 16,
+        estimatedAt: 8,
       },
       {
         id: 'prepare-topic-relation',
         title: '解析人设与话题的交叉关系',
         detail: '生成熟悉度、相关度、可能误解、判断角度和该话题下会显露的特点。',
-        estimatedAt: 35,
+        estimatedAt: 28,
       },
       {
         id: 'finalize-preview',
         title: '写入 AI 人设预览',
         detail: '保留来源支撑和记忆激活线索，准备摘要卡片与展开详情。',
-        estimatedAt: 48,
+        estimatedAt: 40,
       },
     ],
   },
@@ -136,40 +124,28 @@ const GENERATION_FLOW_STEPS: Record<Locale, Record<GenerationFlowKind, FlowStep[
     ],
     imported: [
       {
-        id: 'validate-upload',
-        title: 'Checking uploaded files',
-        detail: 'Verifying CSV, Excel, Word, or text files plus the active model settings.',
+        id: 'prepare-source-data',
+        title: 'Parsing source data',
+        detail: 'Checking uploaded files, reading tables/documents/text, splitting source anchors, and selecting relevant material.',
         estimatedAt: 0,
-      },
-      {
-        id: 'parse-files',
-        title: 'Parsing files into source anchors',
-        detail: 'Reading spreadsheets, documents, and text, then splitting raw material into traceable evidence units.',
-        estimatedAt: 3,
-      },
-      {
-        id: 'rank-evidence',
-        title: 'Selecting topic-relevant material',
-        detail: 'Using semantic similarity and source balancing to choose material for persona distillation.',
-        estimatedAt: 8,
       },
       {
         id: 'distill-memory-personas',
         title: 'LLM is distilling human-like memory systems',
         detail: 'Extracting semantic memory, composite experiences, consumption habits, cognitive style, and language register.',
-        estimatedAt: 16,
+        estimatedAt: 8,
       },
       {
         id: 'prepare-topic-relation',
         title: 'Mapping persona-topic relationships',
         detail: 'Generating familiarity, relevance, possible misunderstandings, decision angles, and visible traits.',
-        estimatedAt: 35,
+        estimatedAt: 28,
       },
       {
         id: 'finalize-preview',
         title: 'Preparing the AI persona preview',
         detail: 'Keeping source support and memory activation cues available for summary cards and expanded details.',
-        estimatedAt: 48,
+        estimatedAt: 40,
       },
     ],
   },
@@ -185,9 +161,12 @@ export function buildFlowProgress(
   step: string,
   detail?: string
 ): FlowProgressEvent {
-  const match = getGenerationFlowSteps(locale, kind).find((item) => item.id === step)
+  const normalizedStep = kind === 'imported' && ['validate-upload', 'parse-files', 'rank-evidence'].includes(step)
+    ? 'prepare-source-data'
+    : step
+  const match = getGenerationFlowSteps(locale, kind).find((item) => item.id === normalizedStep)
   return {
-    step,
+    step: normalizedStep,
     label: match?.title || step,
     detail: detail || match?.detail,
     timestamp: Date.now(),

@@ -1,198 +1,157 @@
 <svg width="1600" height="1020" viewBox="0 0 1600 1020" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="1020" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0D100F"/>
-      <stop offset="0.55" stop-color="#151515"/>
-      <stop offset="1" stop-color="#101315"/>
-    </linearGradient>
-    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#21D39A"/>
-      <stop offset="1" stop-color="#0DA775"/>
-    </linearGradient>
-    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#60A8FF"/>
-      <stop offset="1" stop-color="#256FD2"/>
-    </linearGradient>
-    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#F5C759"/>
-      <stop offset="1" stop-color="#D59023"/>
-    </linearGradient>
-    <filter id="shadow" x="-15%" y="-20%" width="130%" height="150%">
-      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.32"/>
-    </filter>
     <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M2 2L10 6L2 10" stroke="#C8D0CB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M2 2L10 6L2 10" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
     <style>
-      .title{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:54px;font-weight:780;fill:#F5F7F4;letter-spacing:0}
-      .subtitle{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:19px;fill:#AEB8B2}
-      .section{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:20px;font-weight:760;fill:#EDF2EE}
-      .cardTitle{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:22px;font-weight:760;fill:#F6F8F5}
-      .body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:15px;fill:#BBC5BF}
-      .small{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:13px;fill:#9CA8A1}
-      .tiny{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:12px;fill:#7E8983}
-      .badge{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;font-size:12px;font-weight:780;fill:#111614}
-      .mono{font-family:"SFMono-Regular", Consolas, "Liberation Mono", monospace;font-size:12px;fill:#A4AEA8}
-      .line{stroke:#C8D0CB;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow);opacity:.72}
-      .softLine{stroke:#65716A;stroke-width:1.4;stroke-linecap:round;stroke-dasharray:6 8;opacity:.72}
+      .title{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:58px;font-weight:800;fill:#0F172A;letter-spacing:0}
+      .subtitle{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:20px;fill:#475569}
+      .section{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:24px;font-weight:760;fill:#0F172A}
+      .cardTitle{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:24px;font-weight:760;fill:#111827}
+      .body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px;fill:#475569}
+      .small{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;fill:#64748B}
+      .badgeText{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:13px;font-weight:760;fill:#0F172A}
+      .line{stroke:#64748B;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow)}
+      .softLine{stroke:#CBD5E1;stroke-width:2;stroke-linecap:round;stroke-dasharray:7 9}
     </style>
   </defs>
 
-  <rect width="1600" height="1020" fill="url(#bg)"/>
-  <rect x="42" y="42" width="1516" height="936" rx="22" stroke="#2C3430" stroke-width="1.5"/>
+  <rect width="1600" height="1020" fill="#F8FAFC"/>
+  <rect x="40" y="40" width="1520" height="940" rx="28" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
 
   <text x="86" y="112" class="title">SynUsers.AI 技术框架</text>
-  <text x="88" y="151" class="subtitle">从真实来源数据到人类式记忆，再到自然对话、A/B 评估和可追溯研究报告。</text>
+  <text x="88" y="154" class="subtitle">把来源数据蒸馏成虚拟用户，再让他们围绕话题自然讨论、评估方案并生成报告。</text>
 
-  <rect x="1120" y="78" width="360" height="92" rx="10" fill="#171B19" stroke="#2E3733"/>
-  <text x="1148" y="113" class="section">Design Contract</text>
-  <text x="1148" y="141" class="body">Frontend feels human. Backend stays traceable.</text>
-  <text x="1148" y="162" class="small">Distillation-first · RAG-backed · Persona-locked</text>
+  <rect x="1144" y="78" width="338" height="94" rx="14" fill="#F1F5F9" stroke="#CBD5E1"/>
+  <text x="1172" y="116" class="cardTitle" font-size="22">设计原则</text>
+  <text x="1172" y="146" class="body">前台像真人，后台可追溯。</text>
 
-  <text x="86" y="224" class="section">1. Build-time: source data becomes memory-shaped personas</text>
-
-  <g filter="url(#shadow)">
-    <rect x="82" y="254" width="226" height="138" rx="10" fill="#171B19" stroke="#31413A"/>
-    <rect x="106" y="278" width="66" height="24" rx="6" fill="url(#green)"/>
-    <text x="121" y="295" class="badge">INPUT</text>
-    <text x="106" y="332" class="cardTitle">来源输入</text>
-    <text x="106" y="360" class="body">Audience files / topic material</text>
-    <text x="106" y="383" class="small">CSV · Excel · Word · TXT · 人群描述</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="356" y="254" width="226" height="138" rx="10" fill="#171B19" stroke="#31413A"/>
-    <rect x="380" y="278" width="70" height="24" rx="6" fill="#24322C"/>
-    <text x="394" y="295" class="badge" fill="#C7F2DD">PARSE</text>
-    <text x="380" y="332" class="cardTitle">来源锚点</text>
-    <text x="380" y="360" class="body">Parser extracts traceable units</text>
-    <text x="380" y="383" class="small">rows · paragraphs · observations</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="630" y="254" width="250" height="138" rx="10" fill="#171B19" stroke="#31413A"/>
-    <rect x="654" y="278" width="88" height="24" rx="6" fill="url(#blue)"/>
-    <text x="668" y="295" class="badge">DISTILL</text>
-    <text x="654" y="332" class="cardTitle">记忆蒸馏</text>
-    <text x="654" y="360" class="body">Thematic analysis + comparison</text>
-    <text x="654" y="383" class="small">turn data into judgment structures</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="928" y="254" width="250" height="138" rx="10" fill="#171B19" stroke="#31413A"/>
-    <rect x="952" y="278" width="90" height="24" rx="6" fill="#263345"/>
-    <text x="967" y="295" class="badge" fill="#CFE2FF">PERSONA</text>
-    <text x="952" y="332" class="cardTitle">AI 人设核心</text>
-    <text x="952" y="360" class="body">Background · stance · OCEAN</text>
-    <text x="952" y="383" class="small">biases · triggers · language register</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="1226" y="254" width="272" height="138" rx="10" fill="#171B19" stroke="#31413A"/>
-    <rect x="1250" y="278" width="74" height="24" rx="6" fill="url(#amber)"/>
-    <text x="1268" y="295" class="badge">FIT</text>
-    <text x="1250" y="332" class="cardTitle">人设 × 话题关系</text>
-    <text x="1250" y="360" class="body">Familiarity · relevance · confusion</text>
-    <text x="1250" y="383" class="small">random topic · uploaded context · web search</text>
-  </g>
-
-  <path d="M316 323H346" class="line"/>
-  <path d="M590 323H620" class="line"/>
-  <path d="M888 323H918" class="line"/>
-  <path d="M1186 323H1216" class="line"/>
-
-  <rect x="82" y="432" width="1416" height="184" rx="12" fill="#141816" stroke="#2C342F"/>
-  <text x="114" y="473" class="section">Human-like memory system / 人类式记忆系统</text>
-  <text x="114" y="502" class="body">The source is not quoted directly. It becomes what each virtual user remembers, notices, fears, values, and ignores.</text>
+  <text x="86" y="230" class="section">1. 数据蒸馏：来源材料变成人设记忆</text>
 
   <g>
-    <rect x="114" y="532" width="150" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="133" y="557" class="body" font-weight="700" fill="#EAF0EC">语义记忆</text>
-    <text x="133" y="578" class="tiny">stable beliefs</text>
+    <rect x="86" y="264" width="230" height="142" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="114" y="292" width="72" height="28" rx="8" fill="#BBF7D0"/>
+    <text x="132" y="311" class="badgeText">输入</text>
+    <text x="114" y="352" class="cardTitle">来源数据</text>
+    <text x="114" y="382" class="body">人群描述、CSV、Excel</text>
+  </g>
+
+  <g>
+    <rect x="364" y="264" width="230" height="142" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="392" y="292" width="72" height="28" rx="8" fill="#DBEAFE"/>
+    <text x="410" y="311" class="badgeText">切分</text>
+    <text x="392" y="352" class="cardTitle">来源锚点</text>
+    <text x="392" y="382" class="body">保留可追溯证据单元</text>
+  </g>
+
+  <g>
+    <rect x="642" y="264" width="230" height="142" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="670" y="292" width="72" height="28" rx="8" fill="#FEF3C7"/>
+    <text x="688" y="311" class="badgeText">蒸馏</text>
+    <text x="670" y="352" class="cardTitle">人类式记忆</text>
+    <text x="670" y="382" class="body">信念、经历、习惯</text>
+  </g>
+
+  <g>
+    <rect x="920" y="264" width="230" height="142" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="948" y="292" width="72" height="28" rx="8" fill="#EDE9FE"/>
+    <text x="966" y="311" class="badgeText">人设</text>
+    <text x="948" y="352" class="cardTitle">AI 用户核心</text>
+    <text x="948" y="382" class="body">背景、立场、偏见</text>
+  </g>
+
+  <g>
+    <rect x="1198" y="264" width="270" height="142" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="1226" y="292" width="72" height="28" rx="8" fill="#FCE7F3"/>
+    <text x="1244" y="311" class="badgeText">匹配</text>
+    <text x="1226" y="352" class="cardTitle">人设 × 话题</text>
+    <text x="1226" y="382" class="body">熟悉度、相关度、误解</text>
+  </g>
+
+  <path d="M326 335H354" class="line"/>
+  <path d="M604 335H632" class="line"/>
+  <path d="M882 335H910" class="line"/>
+  <path d="M1160 335H1188" class="line"/>
+
+  <rect x="86" y="464" width="1382" height="170" rx="18" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="116" y="508" class="section">记忆系统</text>
+  <text x="116" y="540" class="subtitle" font-size="18">AI 用户不是引用材料，而是让材料变成自己的判断方式。</text>
+
+  <g>
+    <rect x="116" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="143" y="596" class="body" font-weight="700">语义记忆</text>
   </g>
   <g>
-    <rect x="280" y="532" width="168" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="299" y="557" class="body" font-weight="700" fill="#EAF0EC">复合经历</text>
-    <text x="299" y="578" class="tiny">composite situations</text>
+    <rect x="270" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="297" y="596" class="body" font-weight="700">复合经历</text>
   </g>
   <g>
-    <rect x="464" y="532" width="154" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="483" y="557" class="body" font-weight="700" fill="#EAF0EC">消费习惯</text>
-    <text x="483" y="578" class="tiny">budget and habits</text>
+    <rect x="424" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="451" y="596" class="body" font-weight="700">消费习惯</text>
   </g>
   <g>
-    <rect x="634" y="532" width="184" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="653" y="557" class="body" font-weight="700" fill="#EAF0EC">教育与认知方式</text>
-    <text x="653" y="578" class="tiny">reasoning depth</text>
+    <rect x="578" y="568" width="170" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="609" y="596" class="body" font-weight="700">教育与认知</text>
   </g>
   <g>
-    <rect x="834" y="532" width="146" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="853" y="557" class="body" font-weight="700" fill="#EAF0EC">社会身份</text>
-    <text x="853" y="578" class="tiny">roles and pressure</text>
+    <rect x="764" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="791" y="596" class="body" font-weight="700">社会身份</text>
   </g>
   <g>
-    <rect x="996" y="532" width="154" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="1015" y="557" class="body" font-weight="700" fill="#EAF0EC">情绪触发</text>
-    <text x="1015" y="578" class="tiny">risk and annoyance</text>
+    <rect x="918" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="945" y="596" class="body" font-weight="700">情绪触发</text>
   </g>
   <g>
-    <rect x="1166" y="532" width="136" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="1185" y="557" class="body" font-weight="700" fill="#EAF0EC">语言语域</text>
-    <text x="1185" y="578" class="tiny">rhythm, not tics</text>
+    <rect x="1072" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="1099" y="596" class="body" font-weight="700">语言语域</text>
   </g>
   <g>
-    <rect x="1318" y="532" width="144" height="54" rx="8" fill="#1B211E" stroke="#33443C"/>
-    <text x="1337" y="557" class="body" font-weight="700" fill="#EAF0EC">决策捷径</text>
-    <text x="1337" y="578" class="tiny">heuristics</text>
+    <rect x="1226" y="568" width="138" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="1253" y="596" class="body" font-weight="700">决策捷径</text>
   </g>
 
-  <path d="M800 620V670" class="softLine"/>
-  <text x="604" y="656" class="small">source anchors stay private; only explanations and reports surface them</text>
+  <path d="M777 652V690" class="softLine"/>
+  <text x="626" y="682" class="small">RAG 保留在后台，需要解释时再显性展示</text>
 
-  <text x="86" y="704" class="section">2. Runtime: personas become a social simulation</text>
+  <text x="86" y="734" class="section">2. 运行时：人设变成社会模拟</text>
 
-  <g filter="url(#shadow)">
-    <rect x="82" y="734" width="318" height="180" rx="10" fill="#171B19" stroke="#30413A"/>
-    <text x="112" y="774" class="cardTitle">Private memory activation</text>
-    <text x="112" y="807" class="body">Retrieve only the cues needed for this turn.</text>
-    <text x="112" y="833" class="body">They shape examples, risk sense, and buying logic.</text>
-    <rect x="112" y="865" width="166" height="26" rx="7" fill="#1F332A"/>
-    <text x="128" y="883" class="badge" fill="#BDF5DD">RAG: hidden until needed</text>
+  <g>
+    <rect x="86" y="770" width="318" height="146" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="116" y="800" width="88" height="28" rx="8" fill="#BBF7D0"/>
+    <text x="136" y="819" class="badgeText">激活</text>
+    <text x="116" y="860" class="cardTitle">私有记忆</text>
+    <text x="116" y="890" class="body">只取本轮需要的线索</text>
   </g>
 
-  <g filter="url(#shadow)">
-    <rect x="442" y="734" width="318" height="180" rx="10" fill="#171B19" stroke="#30413A"/>
-    <text x="472" y="774" class="cardTitle">Persona lock</text>
-    <text x="472" y="807" class="body">Every reply must come from this profile.</text>
-    <text x="472" y="833" class="body">Background, stance, bias, topic fit, memory.</text>
-    <rect x="472" y="865" width="172" height="26" rx="7" fill="#263345"/>
-    <text x="488" y="883" class="badge" fill="#CEE1FF">profile drives speech</text>
+  <g>
+    <rect x="446" y="770" width="318" height="146" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="476" y="800" width="88" height="28" rx="8" fill="#DBEAFE"/>
+    <text x="496" y="819" class="badgeText">锁定</text>
+    <text x="476" y="860" class="cardTitle">画像驱动发言</text>
+    <text x="476" y="890" class="body">说话由人设决定</text>
   </g>
 
-  <g filter="url(#shadow)">
-    <rect x="802" y="734" width="318" height="180" rx="10" fill="#171B19" stroke="#30413A"/>
-    <text x="832" y="774" class="cardTitle">Interaction engine</text>
-    <text x="832" y="807" class="body">Speaker impulse, silence compensation, tension.</text>
-    <text x="832" y="833" class="body">Agents react to each other, not to a fixed script.</text>
-    <rect x="832" y="865" width="162" height="26" rx="7" fill="#342D20"/>
-    <text x="848" y="883" class="badge" fill="#FFE2A0">emergent discussion</text>
+  <g>
+    <rect x="806" y="770" width="318" height="146" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="836" y="800" width="88" height="28" rx="8" fill="#FEF3C7"/>
+    <text x="856" y="819" class="badgeText">互动</text>
+    <text x="836" y="860" class="cardTitle">多 Agent 对话</text>
+    <text x="836" y="890" class="body">发言冲动、沉默补偿、分歧</text>
   </g>
 
-  <g filter="url(#shadow)">
-    <rect x="1162" y="734" width="336" height="180" rx="10" fill="#171B19" stroke="#30413A"/>
-    <text x="1192" y="774" class="cardTitle">Research outputs</text>
-    <text x="1192" y="807" class="body">Roundtable chat, A/B testing, interview rehearsal.</text>
-    <text x="1192" y="833" class="body">Reports preserve memory activation and sources.</text>
-    <rect x="1192" y="865" width="162" height="26" rx="7" fill="#2C3325"/>
-    <text x="1208" y="883" class="badge" fill="#D8F2B8">natural + auditable</text>
+  <g>
+    <rect x="1166" y="770" width="302" height="146" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+    <rect x="1196" y="800" width="88" height="28" rx="8" fill="#EDE9FE"/>
+    <text x="1216" y="819" class="badgeText">输出</text>
+    <text x="1196" y="860" class="cardTitle">研究结果</text>
+    <text x="1196" y="890" class="body">圆桌、A/B、报告</text>
   </g>
 
-  <path d="M408 824H432" class="line"/>
-  <path d="M768 824H792" class="line"/>
-  <path d="M1128 824H1152" class="line"/>
+  <path d="M414 842H436" class="line"/>
+  <path d="M774 842H796" class="line"/>
+  <path d="M1134 842H1156" class="line"/>
 
-  <rect x="82" y="948" width="1416" height="1" fill="#2C342F"/>
-  <text x="88" y="981" class="mono">Runtime formula:</text>
-  <text x="238" y="981" class="small">utterance = shared topic + persona core + topic fit + private memory + current social tension</text>
-  <text x="1118" y="981" class="small">The answer is inferred through interaction, not played from a script.</text>
+  <rect x="86" y="948" width="1382" height="1" fill="#E2E8F0"/>
+  <text x="96" y="982" class="small">核心公式：发言 = 共同话题 + 人设核心 + 话题关系 + 私有记忆 + 当前群体张力</text>
+  <text x="1060" y="982" class="small">结论来自互动推导，而不是预设脚本。</text>
 </svg>

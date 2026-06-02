@@ -16,6 +16,8 @@ import { useLocaleStore } from '@/lib/locale-store'
 import { useBYOKStore } from '@/lib/byok-store'
 import { detectProviderName, modelProviderFromProtocol, type LLMProtocol } from '@/lib/llm/provider-config'
 import { getGenerationFlowSteps, type FlowProgressEvent, type GenerationFlowKind } from '@/lib/flow-progress'
+import { getModelInterruptedMessage, getRawErrorMessage, isAbortLikeError } from '@/lib/error-message'
+import { ROUNDTABLE_DURATION_PRESETS, getRoundtableDurationPreset, type RoundtableDurationTier } from '@/lib/roundtable-duration'
 import type { SimAgent } from '@/lib/simulation-store'
 
 const RANDOM_CROWDS = {
@@ -228,7 +230,11 @@ const HOME_COPY = {
     topicMaterialHint: '支持 CSV、Excel、Word、TXT；会作为后台话题语境影响熟悉度、相关度和误解点',
     topicMaterialUploading: '正在解析话题资料...',
     duration: '对话时长',
-    minutes: '分钟',
+    durationOptions: {
+      short: '短 · 约 30 分钟',
+      medium: '中 · 约 60 分钟',
+      long: '长 · 约 90 分钟',
+    },
     agents: '虚拟用户数量',
     people: '人',
     model: '当前模型服务',
@@ -243,6 +249,8 @@ const HOME_COPY = {
     generateFromData: '基于来源数据生成人设',
     loadingUsers: (count: string) => `正在生成 ${count} 个虚拟用户...`,
     loadingFromData: (count: string) => `正在从来源数据生成 ${count} 个记忆化人设...`,
+    generationNotice: '生成可能需要 1-3 分钟，请不要关闭页面或离开当前流程。',
+    leaveWarning: '人设还在生成中，离开页面会中断本次生成。',
     flowTitle: '生成流程',
     flowStep: (current: number, total: number) => `${current}/${total}`,
     streamNoResult: '接口没有返回最终人设结果',
@@ -255,7 +263,7 @@ const HOME_COPY = {
     synthesizeEvidence: '→ 蒸馏消费习惯、认知方式和语言风格...',
     callLlm: '→ 调用 LLM 生成角色（预计 20-40s）...',
     parseResult: '→ 解析结果...',
-    slow: '⚠ 耗时较长，请继续等待或检查网络',
+    slow: '仍在生成中，请继续等待；如长时间无响应再检查网络。',
     invalidAgents: '未返回有效角色数据',
     tagline: '将你的人群数据蒸馏成可对话的 AI 虚拟用户',
   },
@@ -280,7 +288,11 @@ const HOME_COPY = {
     topicMaterialHint: 'Supports CSV, Excel, Word, and TXT. Used as private topic context for familiarity, relevance, and misunderstandings.',
     topicMaterialUploading: 'Parsing topic material...',
     duration: 'Duration',
-    minutes: 'min',
+    durationOptions: {
+      short: 'Short · about 30 min',
+      medium: 'Medium · about 60 min',
+      long: 'Long · about 90 min',
+    },
     agents: 'Virtual users',
     people: 'users',
     model: 'Current model provider',
@@ -295,6 +307,8 @@ const HOME_COPY = {
     generateFromData: 'Generate personas from source data',
     loadingUsers: (count: string) => `Generating ${count} virtual users...`,
     loadingFromData: (count: string) => `Generating ${count} memory-grounded personas from source data...`,
+    generationNotice: 'Generation may take 1-3 minutes. Please keep this page open.',
+    leaveWarning: 'Personas are still being generated. Leaving will interrupt this run.',
     flowTitle: 'Generation flow',
     flowStep: (current: number, total: number) => `${current}/${total}`,
     streamNoResult: 'The API did not return final persona data',
@@ -307,14 +321,14 @@ const HOME_COPY = {
     synthesizeEvidence: '→ Distilling habits, cognitive style, and language register...',
     callLlm: '→ Calling LLM to generate personas (about 20-40s)...',
     parseResult: '→ Parsing result...',
-    slow: '⚠ Taking longer than usual. Keep waiting or check the network.',
+    slow: 'Still generating. Keep waiting; check the network only if it stays unresponsive.',
     invalidAgents: 'No valid persona data returned',
     tagline: 'Distill your audience data into conversational AI personas',
   },
 }
 
 const ALL_DEFAULT_TOPICS = [...RANDOM_TOPICS.zh, ...RANDOM_TOPICS.en]
-type RuntimeModelProvider = 'gpt-5.4' | 'gemini'
+type RuntimeModelProvider = 'gpt-5.5' | 'gemini'
 
 interface RuntimeModelInfo {
   source: 'page' | 'env'
@@ -396,9 +410,12 @@ async function createHttpError(res: Response): Promise<Error> {
 }
 
 function formatGenerationError(err: unknown, locale: 'zh' | 'en', networkError: string): string {
-  const raw = err instanceof Error ? err.message : String(err)
+  const raw = getRawErrorMessage(err)
   if (/Failed to fetch|NetworkError|Load failed|ERR_CONNECTION_REFUSED|ERR_EMPTY_RESPONSE/i.test(raw)) {
     return networkError
+  }
+  if (isAbortLikeError(err)) {
+    return getModelInterruptedMessage(locale)
   }
   const cleaned = raw.replace(/^Error:\s*/, '')
   if (locale === 'zh' && cleaned.includes('No usable text found')) {
@@ -411,7 +428,7 @@ function formatGenerationError(err: unknown, locale: 'zh' | 'en', networkError: 
 }
 
 function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === 'AbortError'
+  return isAbortLikeError(err)
 }
 
 export default function ConfigPage() {
@@ -425,9 +442,9 @@ export default function ConfigPage() {
   const [crowdDescription, setCrowdDescription] = useState('')
   const [topic, setTopic] = useState(HOME_COPY.zh.defaultTopic)
   const [topicContext, setTopicContext] = useState('')
-  const [duration, setDuration] = useState(10)
+  const [durationTier, setDurationTier] = useState<RoundtableDurationTier>('medium')
   const [agentCount, setAgentCount] = useState('4')
-  const [model, setModel] = useState<RuntimeModelProvider>('gpt-5.4')
+  const [model, setModel] = useState<RuntimeModelProvider>('gpt-5.5')
   const [envModelInfo, setEnvModelInfo] = useState<RuntimeModelInfo | null>(null)
   const [activeMode, setActiveMode] = useState<'roundtable' | 'interview' | 'abtest'>('roundtable')
   const [loading, setLoading] = useState(false)
@@ -457,6 +474,7 @@ export default function ConfigPage() {
     : null
   const currentModelInfo = pageModelInfo || envModelInfo
   const effectiveModel = currentModelInfo?.modelProvider || model
+  const durationPreset = getRoundtableDurationPreset(durationTier)
   const modelTitle = currentModelInfo
     ? `${currentModelInfo.providerName} · ${currentModelInfo.model}`
     : copy.modelDetecting
@@ -470,6 +488,19 @@ export default function ConfigPage() {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [loading])
+
+  useEffect(() => {
+    if (!loading) return
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      event.returnValue = copy.leaveWarning
+      return copy.leaveWarning
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [loading, copy.leaveWarning])
 
   useEffect(() => {
     hydrateModelConfig()
@@ -488,7 +519,7 @@ export default function ConfigPage() {
           providerName: String(data.providerName || 'Custom'),
           model: String(data.model || ''),
           baseUrl: String(data.baseUrl || ''),
-          modelProvider: data.modelProvider === 'gemini' ? 'gemini' : 'gpt-5.4',
+          modelProvider: data.modelProvider === 'gemini' ? 'gemini' : 'gpt-5.5',
         })
       })
       .catch(() => {
@@ -569,7 +600,7 @@ export default function ConfigPage() {
     setGenError('')
     setFlowMode('imported')
     setFlowProgress(null)
-    setConfig({ topic, topicContext, mode: 'imported', duration, model: effectiveModel, locale })
+    setConfig({ topic, topicContext, mode: 'imported', duration: durationPreset.legacyMinutes, durationTier, model: effectiveModel, locale })
     setStatus('generating')
     setLoading(true)
 
@@ -609,7 +640,7 @@ export default function ConfigPage() {
         throw new Error(copy.invalidAgents)
       }
     } catch (err) {
-      if (isAbortError(err)) {
+      if (abortController.signal.aborted && isAbortError(err)) {
         setGenError('')
         setFlowProgress(null)
         setStatus('idle')
@@ -638,7 +669,7 @@ export default function ConfigPage() {
     setGenError('')
     setFlowMode('generated')
     setFlowProgress(null)
-    setConfig({ topic, topicContext, mode: 'generated', duration, model: effectiveModel, locale })
+    setConfig({ topic, topicContext, mode: 'generated', duration: durationPreset.legacyMinutes, durationTier, model: effectiveModel, locale })
     setStatus('generating')
     setLoading(true)
 
@@ -676,7 +707,7 @@ export default function ConfigPage() {
         throw new Error(copy.invalidAgents)
       }
     } catch (err) {
-      if (isAbortError(err)) {
+      if (abortController.signal.aborted && isAbortError(err)) {
         setGenError('')
         setFlowProgress(null)
         setStatus('idle')
@@ -893,16 +924,14 @@ export default function ConfigPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>{copy.duration}</Label>
-                <Select value={`${duration}`} onValueChange={(v) => setDuration(Number(v))}>
+                <Select value={durationTier} onValueChange={(v) => setDurationTier(v as RoundtableDurationTier)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue>{copy.durationOptions[durationTier]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5 {copy.minutes}</SelectItem>
-                    <SelectItem value="10">10 {copy.minutes}</SelectItem>
-                    <SelectItem value="20">20 {copy.minutes}</SelectItem>
-                    <SelectItem value="30">30 {copy.minutes}</SelectItem>
-                    <SelectItem value="60">60 {copy.minutes}</SelectItem>
+                    {(Object.keys(ROUNDTABLE_DURATION_PRESETS) as RoundtableDurationTier[]).map((key) => (
+                      <SelectItem key={key} value={key}>{copy.durationOptions[key]}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -962,6 +991,9 @@ export default function ConfigPage() {
               </DialogHeader>
 
               <div className="space-y-1.5">
+                <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/30 dark:text-amber-200">
+                  {copy.generationNotice}
+                </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-foreground/65 transition-all duration-1000 ease-out"

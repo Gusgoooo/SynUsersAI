@@ -5,6 +5,8 @@ import { parseRequestProviderConfig } from '@/lib/llm/request-config'
 import { generateTopicPreparation } from '@/lib/research/topic-preparation'
 import type { AgentPersona, EngagementCurve } from '@/lib/engine/types'
 import { buildFlowProgress, type FlowProgressEvent } from '@/lib/flow-progress'
+import { normalizePersonaDisplayNames } from '@/lib/persona/names'
+import { getPublicErrorMessage } from '@/lib/error-message'
 
 export const runtime = 'nodejs'
 export const maxDuration = 240
@@ -29,7 +31,7 @@ interface GeneratePersonasInput {
 type ProgressEmitter = (progress: FlowProgressEvent) => void | Promise<void>
 
 async function buildGeneratedPersonas(input: GeneratePersonasInput, emit?: ProgressEmitter) {
-  const { topic, topicContext = '', crowdDescription, agentCount = 4, model = 'gpt-5.4', language = 'zh', llmConfig } = input
+  const { topic, topicContext = '', crowdDescription, agentCount = 4, model = 'gpt-5.5', language = 'zh', llmConfig } = input
   const locale = normalizeLocale(language)
   const providerConfig = parseRequestProviderConfig(llmConfig)
   const topicMaterial = String(topicContext || '').trim()
@@ -127,7 +129,7 @@ speakingStyle 不是口头禅清单。不要写"常说..."、"喜欢用..."、�
   )
 
   await emitStep('normalize-personas')
-  const agents: AgentPersona[] = result.agents.map((agent) => ({
+  const agents: AgentPersona[] = normalizePersonaDisplayNames(result.agents.map((agent) => ({
     id: crypto.randomUUID(),
     name: agent.name,
     background: agent.background || '',
@@ -142,19 +144,23 @@ speakingStyle 不是口头禅清单。不要写"常说..."、"喜欢用..."、�
     ocean: normalizeOcean(agent.ocean),
     biases: normalizeBiases(agent.biases),
     ...createRuntimePersonaState(),
-  }))
+  })))
 
   await emitStep('prepare-topic-relation')
-  const topicPreparation = await generateTopicPreparation(
-    topic,
-    agents,
-    model as ModelProvider,
-    locale,
-    providerConfig,
-    topicMaterial
-  )
-  for (const agent of agents) {
-    agent.topicRelation = topicPreparation.personaRelations[agent.id]
+  try {
+    const topicPreparation = await generateTopicPreparation(
+      topic,
+      agents,
+      model as ModelProvider,
+      locale,
+      providerConfig,
+      topicMaterial
+    )
+    for (const agent of agents) {
+      agent.topicRelation = topicPreparation.personaRelations[agent.id]
+    }
+  } catch (error) {
+    console.warn('[GeneratePersonas] Topic relation preparation skipped:', error)
   }
 
   await emitStep('finalize-preview')
@@ -177,7 +183,7 @@ function streamJsonResponse(input: GeneratePersonasInput) {
       await send('done', {})
     } catch (err) {
       console.error('[generate-personas] Error:', err)
-      await send('error', { message: String(err) })
+      await send('error', { message: getPublicErrorMessage(err, normalizeLocale(input.language)) })
     } finally {
       await writer.close()
     }
@@ -204,6 +210,6 @@ export async function POST(req: Request) {
     return Response.json(result)
   } catch (err) {
     console.error('[generate-personas] Error:', err)
-    return Response.json({ error: String(err) }, { status: 500 })
+    return Response.json({ error: getPublicErrorMessage(err, normalizeLocale(input.language)) }, { status: 500 })
   }
 }
