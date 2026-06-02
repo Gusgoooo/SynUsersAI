@@ -1,6 +1,6 @@
 import { calculateAgentImpulse } from '@/lib/engine/speaker-selector'
 import { processTurnAndReflect } from '@/lib/engine/state-updater'
-import { compileSingleHopPrompt } from '@/lib/engine/context-builder'
+import { compileNaturalSpeechPrompt } from '@/lib/engine/context-builder'
 import { generateMarkdownReport } from '@/lib/engine/reporter'
 import { chatCompletion, chatCompletionJSON, cosineSimilarity, getEmbedding, type ModelProvider } from '@/lib/engine/llm'
 import { buildModeratorSystemPrompt, getModeratorDirective } from '@/lib/engine/prompts'
@@ -202,6 +202,40 @@ function formatModeratorMetrics(locale: Locale, metrics: DiscussionMetrics): str
   ].join('；')
 }
 
+function buildImpulseScoresForTurn(
+  personas: AgentPersona[],
+  lastMessage: UtteranceMessage,
+  historyLength: number
+) {
+  return personas
+    .filter((p) => p.id !== lastMessage.speakerId)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      impulse: calculateAgentImpulse(p, lastMessage, historyLength),
+      cd: lastMessage.embedding && p.current_belief_vector.length > 0
+        ? 1.0 - Math.abs(
+            p.current_belief_vector.reduce((sum, v, i) => sum + v * (lastMessage.embedding![i] ?? 0), 0) /
+            (Math.sqrt(p.current_belief_vector.reduce((s, v) => s + v * v, 0)) *
+              Math.sqrt((lastMessage.embedding ?? []).reduce((s, v) => s + v * v, 0)) || 1)
+          )
+        : 0,
+      ri: Math.exp(-0.3 * p.turns_since_last_speak),
+    }))
+    .sort((a, b) => b.impulse - a.impulse)
+}
+
+function pickNextSpeaker(
+  personas: AgentPersona[],
+  impulseScores: Array<{ id: string }>
+): AgentPersona | null {
+  for (const score of impulseScores) {
+    const persona = personas.find((agent) => agent.id === score.id)
+    if (persona && persona.energy > 0) return persona
+  }
+  return null
+}
+
 async function generateModeratorIntervention(
   topic: string,
   topicBriefing: string,
@@ -365,6 +399,27 @@ type AgentTurnResponse = {
 type AgentTurnMetadata = {
   inner_thoughts: string
   activatedMemories?: ActivatedMemory[]
+}
+
+interface PreparedAgentTurn {
+  speaker: AgentPersona
+  response: AgentTurnResponse
+  availableEvidence: RetrievedEvidence[]
+  utterances: UtteranceMessage[]
+  responseEmbedding: number[]
+}
+
+interface CommittedAgentTurn {
+  metadataTargetId?: string
+  cognitiveEvents: Array<{ type: 'shock' | 'overload'; agentName: string; value: number; round: number }>
+  stateAgents: Array<Partial<AgentPersona> & { id: string }>
+  convergence: { turn: number; min: number; max: number; median: number; clusters: number }
+}
+
+interface PrefetchedAgentTurn {
+  speakerId: string
+  historyLength: number
+  promise: Promise<PreparedAgentTurn | null>
 }
 
 function splitIntoSegments(text: string): string[] {
@@ -535,7 +590,7 @@ ${noRepeatInstruction}
             { role: 'system', content: plainSystem },
             { role: 'user', content: plainUser },
           ],
-          { temperature: Math.min(1, 0.82 + attempt * 0.08), maxTokens: 320, model, providerConfig }
+          { temperature: Math.min(1, 0.82 + attempt * 0.08), maxTokens: 260, model, providerConfig }
         ),
         speaker
       )
@@ -867,7 +922,7 @@ export async function POST(req: Request) {
         const availableEvidence = await retrieveEvidenceForTurn(persona, topic, history)
         const speakerForTurn = { ...persona, evidence: availableEvidence }
         const initialProgress = Math.min(0.28, 0.16 + index * 0.03)
-        const { system, user } = compileSingleHopPrompt(speakerForTurn, history, '', topic, initialProgress, locale, topicBriefingText)
+        const { system, user } = compileNaturalSpeechPrompt(speakerForTurn, history, topic, initialProgress, locale, topicBriefingText)
         const response = await generateAgentTurnText(persona, system, user, history, model as ModelProvider, locale, providerConfig)
         const segments = splitIntoSegments(response.text)
 
@@ -895,6 +950,178 @@ export async function POST(req: Request) {
       let turnsSinceModerator = 0
       const discussionSpeakers = new Set<string>(personas.map((persona) => persona.id))
       const noveltyLog: number[] = []
+      let prefetchedTurn: PrefetchedAgentTurn | null = null
+
+      async function prepareAgentTurn(
+        speaker: AgentPersona,
+        progress: number,
+        historySnapshot: UtteranceMessage[]
+      ): Promise<PreparedAgentTurn> {
+        const availableEvidence = await retrieveEvidenceForTurn(speaker, topic, historySnapshot)
+        const speakerForTurn = { ...speaker, evidence: availableEvidence }
+        const { system, user } = compileNaturalSpeechPrompt(speakerForTurn, historySnapshot, topic, progress, locale, topicBriefingText)
+        const response = await generateAgentTurnText(speaker, system, user, historySnapshot, model as ModelProvider, locale, providerConfig)
+        const responseEmbedding = await getEmbedding(response.text)
+        const segments = splitIntoSegments(response.text)
+        const utterances = await Promise.all(segments.map(async (segment) => ({
+          id: crypto.randomUUID(),
+          speakerId: speaker.id,
+          speakerName: speaker.name,
+          text: segment,
+          inner_thoughts: '',
+          embedding: await getEmbedding(segment),
+        })))
+
+        return {
+          speaker,
+          response,
+          availableEvidence,
+          utterances,
+          responseEmbedding,
+        }
+      }
+
+      async function commitAgentTurnInternally(prepared: PreparedAgentTurn): Promise<CommittedAgentTurn> {
+        noveltyLog.push(computeEmbeddingNovelty(prepared.responseEmbedding, history))
+        if (noveltyLog.length > 30) noveltyLog.shift()
+
+        for (const utterance of prepared.utterances) {
+          history.push(utterance)
+          lastMessage = utterance
+        }
+
+        speakerTurnCount++
+        discussionSpeakers.add(prepared.speaker.id)
+        turnsSinceModerator++
+
+        const preStates = new Map(personas.map((p) => [p.id, {
+          acc: Number(p.accumulated_dissonance) || 0,
+          prev: Number(p.previous_dissonance) || 0,
+        }]))
+
+        try {
+          await processTurnAndReflect(personas, lastMessage, history)
+        } catch (e) {
+          console.error('[State Update] Error:', e)
+        }
+
+        const cognitiveEvents: CommittedAgentTurn['cognitiveEvents'] = []
+        for (const p of personas) {
+          const pre = preStates.get(p.id) || { acc: 0, prev: 0 }
+          const spike = (Number(p.previous_dissonance) || 0) - pre.prev
+          if (spike >= 0.5) {
+            cognitiveEvents.push({ type: 'shock', agentName: p.name, value: spike, round: speakerTurnCount })
+          } else if (p.accumulated_dissonance >= 3.0) {
+            cognitiveEvents.push({ type: 'overload', agentName: p.name, value: p.accumulated_dissonance, round: speakerTurnCount })
+            p.accumulated_dissonance = 0
+          }
+          dissonanceLog[p.id].push(Number(p.previous_dissonance) || 0)
+        }
+
+        const stateAgents = personas.map((p) => ({
+          id: p.id,
+          name: p.name,
+          profileTitle: p.profileTitle,
+          energy: p.energy,
+          accumulated_dissonance: p.accumulated_dissonance,
+          stance: p.stance,
+          turns_since_last_speak: p.turns_since_last_speak,
+          currentEmotion: p.currentEmotion,
+          emotionIntensity: p.emotionIntensity,
+        }))
+
+        const conv = computeConvergence(personas, history)
+        return {
+          metadataTargetId: prepared.utterances[0]?.id,
+          cognitiveEvents,
+          stateAgents,
+          convergence: { turn: speakerTurnCount, min: conv.min, max: conv.max, median: conv.median, clusters: conv.clusters },
+        }
+      }
+
+      async function emitCommittedAgentTurn(prepared: PreparedAgentTurn, committed: CommittedAgentTurn) {
+        for (const utterance of prepared.utterances) {
+          await streamText(utterance.id, utterance.speakerId, utterance.speakerName, utterance.text)
+        }
+
+        if (committed.metadataTargetId) {
+          const metadataTargetId = committed.metadataTargetId
+          const enrichmentTask = generateAgentTurnMetadata(
+            prepared.speaker,
+            prepared.response.text,
+            prepared.availableEvidence,
+            topic,
+            locale,
+            model as ModelProvider,
+            providerConfig
+          )
+            .then(async (metadata) => {
+              const normalizedMemories = normalizeActivatedMemories(metadata.activatedMemories, prepared.availableEvidence)
+              const activatedMemories = normalizedMemories
+              const usedEvidence = evidenceFromActivatedMemories(prepared.availableEvidence, activatedMemories)
+              const usedEvidenceIds = usedEvidence.map((item) => item.evidenceId)
+              const targetMessage = history.find((message) => message.id === metadataTargetId)
+              if (targetMessage) {
+                targetMessage.inner_thoughts = metadata.inner_thoughts || ''
+                targetMessage.activatedMemories = activatedMemories
+                targetMessage.evidence = usedEvidence
+                targetMessage.usedEvidenceIds = usedEvidenceIds
+              }
+              await send('message-metadata', {
+                id: metadataTargetId,
+                inner_thoughts: metadata.inner_thoughts || '',
+                activatedMemories,
+                evidence: usedEvidence,
+                usedEvidenceIds,
+              })
+            })
+            .catch((error) => {
+              console.error(`[${prepared.speaker.name}] Async memory enrichment failed:`, error)
+            })
+          enrichmentTasks.push(enrichmentTask)
+        }
+
+        for (const event of committed.cognitiveEvents) {
+          await send('cognitive-event', event)
+        }
+        await send('state-update', { agents: committed.stateAgents })
+        await send('convergence', committed.convergence)
+      }
+
+      function scheduleNextPrefetch(): PrefetchedAgentTurn | null {
+        const metrics = buildDiscussionMetrics(personas, history, speakerTurnCount, discussionSpeakers, noveltyLog, durationPreset)
+        if (shouldEndNaturally(metrics, durationPreset, noveltyLog)) return null
+        if (shouldSafetyClose(metrics, durationPreset, startTime)) return null
+        if (speakerTurnCount > 0 && turnsSinceModerator >= getModeratorInterval(metrics.stage) && lastMessage.speakerId !== 'system') return null
+
+        const impulseScores = buildImpulseScoresForTurn(personas, lastMessage, history.length)
+        const speaker = pickNextSpeaker(personas, impulseScores)
+        if (!speaker) return null
+
+        const historySnapshot = history.slice()
+        const progress = computeSessionProgress(metrics, durationPreset)
+        return {
+          speakerId: speaker.id,
+          historyLength: historySnapshot.length,
+          promise: prepareAgentTurn(speaker, progress, historySnapshot).catch((error) => {
+            console.error(`[${speaker.name}] Background prefetch failed:`, error)
+            return null
+          }),
+        }
+      }
+
+      async function getPreparedTurnForSpeaker(
+        speaker: AgentPersona,
+        progress: number
+      ): Promise<PreparedAgentTurn> {
+        const cached = prefetchedTurn
+        prefetchedTurn = null
+        if (cached && cached.speakerId === speaker.id && cached.historyLength === history.length) {
+          const prepared = await cached.promise
+          if (prepared) return prepared
+        }
+        return prepareAgentTurn(speaker, progress, history.slice())
+      }
 
       while (true) {
         const metrics = buildDiscussionMetrics(personas, history, speakerTurnCount, discussionSpeakers, noveltyLog, durationPreset)
@@ -937,7 +1164,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // Select 1-2 speakers per turn
+        // Select one live speaker; the next one is prefetched while this turn is being typed out.
         selectionRound++
         const latestMetrics = buildDiscussionMetrics(personas, history, speakerTurnCount, discussionSpeakers, noveltyLog, durationPreset)
         await sendProgress(
@@ -946,165 +1173,25 @@ export async function POST(req: Request) {
             ? `Round ${selectionRound}: ${latestMetrics.stage} stage, calculating speaking impulse from disagreement, silence, and energy.`
             : `第 ${selectionRound} 轮：当前为${latestMetrics.stage}阶段，根据观点差异、沉默时间和能量计算发言冲动。`
         )
-        const impulseScores = personas
-          .filter((p) => p.id !== lastMessage.speakerId)
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            impulse: calculateAgentImpulse(p, lastMessage, history.length),
-            cd: lastMessage.embedding && p.current_belief_vector.length > 0
-              ? 1.0 - Math.abs(
-                  p.current_belief_vector.reduce((sum, v, i) => sum + v * (lastMessage.embedding![i] ?? 0), 0) /
-                  (Math.sqrt(p.current_belief_vector.reduce((s, v) => s + v * v, 0)) *
-                    Math.sqrt((lastMessage.embedding ?? []).reduce((s, v) => s + v * v, 0)) || 1)
-                )
-              : 0,
-            ri: Math.exp(-0.3 * p.turns_since_last_speak),
-          }))
-          .sort((a, b) => b.impulse - a.impulse)
+        const impulseScores = buildImpulseScoresForTurn(personas, lastMessage, history.length)
 
         await send('impulse-scores', { scores: impulseScores })
 
-        // Pick 1-2 speakers
-        const speakerCount = Math.random() < 0.3 ? 2 : 1
-        const selectedSpeakers: AgentPersona[] = []
-        for (let s = 0; s < speakerCount && s < impulseScores.length; s++) {
-          const p = personas.find(a => a.id === impulseScores[s].id)
-          if (p && p.energy > 0) selectedSpeakers.push(p)
-        }
+        const speaker = pickNextSpeaker(personas, impulseScores)
+        if (!speaker) break
 
-        if (selectedSpeakers.length === 0) break
+        const progress = computeSessionProgress(latestMetrics, durationPreset)
+        await sendProgress(
+          'response-generation',
+          locale === 'en'
+            ? `${speaker.name} is generating from an optimized live context.`
+            : `${speaker.name} 正在基于优化后的现场上下文生成自然发言。`
+        )
 
-        // Generate responses — start next generation while streaming current
-        for (let si = 0; si < selectedSpeakers.length; si++) {
-          const beforeTurnMetrics = buildDiscussionMetrics(personas, history, speakerTurnCount, discussionSpeakers, noveltyLog, durationPreset)
-          if (shouldEndNaturally(beforeTurnMetrics, durationPreset, noveltyLog) || shouldSafetyClose(beforeTurnMetrics, durationPreset, startTime)) break
-
-          const speaker = selectedSpeakers[si]
-          const progress = computeSessionProgress(beforeTurnMetrics, durationPreset)
-          await sendProgress(
-            'memory-retrieval',
-            locale === 'en'
-              ? `Activating memories and source cues for ${speaker.name}.`
-              : `正在为 ${speaker.name} 激活相关记忆和来源线索。`
-          )
-          const availableEvidence = await retrieveEvidenceForTurn(speaker, topic, history)
-          const speakerForTurn = { ...speaker, evidence: availableEvidence }
-          const { system, user } = compileSingleHopPrompt(speakerForTurn, history, '', topic, progress, locale, topicBriefingText)
-
-          await sendProgress(
-            'response-generation',
-            locale === 'en'
-              ? `${speaker.name} is generating a reply shaped by profile, memory, and topic fit.`
-              : `${speaker.name} 正在根据画像、记忆和话题关系生成自然发言。`
-          )
-          const response = await generateAgentTurnText(speaker, system, user, history, model as ModelProvider, locale, providerConfig)
-
-          const responseEmbedding = await getEmbedding(response.text)
-          noveltyLog.push(computeEmbeddingNovelty(responseEmbedding, history))
-          if (noveltyLog.length > 30) noveltyLog.shift()
-
-          const segments = splitIntoSegments(response.text)
-          const utteranceIds: string[] = []
-
-          for (const segment of segments) {
-            const utteranceId = crypto.randomUUID()
-            utteranceIds.push(utteranceId)
-            await streamText(utteranceId, speaker.id, speaker.name, segment)
-
-            const utterance: UtteranceMessage = {
-              id: utteranceId,
-              speakerId: speaker.id,
-              speakerName: speaker.name,
-              text: segment,
-              inner_thoughts: '',
-              embedding: await getEmbedding(segment),
-            }
-            history.push(utterance)
-            lastMessage = utterance
-          }
-
-          speakerTurnCount++
-          discussionSpeakers.add(speaker.id)
-
-          const metadataTargetId = utteranceIds[0]
-          if (metadataTargetId) {
-            const enrichmentTask = generateAgentTurnMetadata(
-              speaker,
-              response.text,
-              availableEvidence,
-              topic,
-              locale,
-              model as ModelProvider,
-              providerConfig
-            )
-              .then(async (metadata) => {
-                const normalizedMemories = normalizeActivatedMemories(metadata.activatedMemories, availableEvidence)
-                const activatedMemories = normalizedMemories
-                const usedEvidence = evidenceFromActivatedMemories(availableEvidence, activatedMemories)
-                const usedEvidenceIds = usedEvidence.map((item) => item.evidenceId)
-                const targetMessage = history.find((message) => message.id === metadataTargetId)
-                if (targetMessage) {
-                  targetMessage.inner_thoughts = metadata.inner_thoughts || ''
-                  targetMessage.activatedMemories = activatedMemories
-                  targetMessage.evidence = usedEvidence
-                  targetMessage.usedEvidenceIds = usedEvidenceIds
-                }
-                await send('message-metadata', {
-                  id: metadataTargetId,
-                  inner_thoughts: metadata.inner_thoughts || '',
-                  activatedMemories,
-                  evidence: usedEvidence,
-                  usedEvidenceIds,
-                })
-              })
-              .catch((error) => {
-                console.error(`[${speaker.name}] Async memory enrichment failed:`, error)
-              })
-            enrichmentTasks.push(enrichmentTask)
-          }
-          turnsSinceModerator++
-
-          // State update after each speaker
-          const preStates = new Map(personas.map((p) => [p.id, { acc: p.accumulated_dissonance, prev: p.previous_dissonance }]))
-
-          try {
-            await sendProgress('state-update')
-            await processTurnAndReflect(personas, lastMessage, history)
-          } catch (e) {
-            console.error('[State Update] Error:', e)
-          }
-
-          for (const p of personas) {
-            const pre = preStates.get(p.id)!
-            const spike = p.previous_dissonance - pre.prev
-            if (spike >= 0.5) {
-              await send('cognitive-event', { type: 'shock', agentName: p.name, value: spike, round: speakerTurnCount })
-            } else if (p.accumulated_dissonance >= 3.0) {
-              await send('cognitive-event', { type: 'overload', agentName: p.name, value: p.accumulated_dissonance, round: speakerTurnCount })
-              p.accumulated_dissonance = 0
-            }
-            dissonanceLog[p.id].push(p.previous_dissonance)
-          }
-
-          await send('state-update', {
-            agents: personas.map((p) => ({
-              id: p.id,
-              name: p.name,
-              profileTitle: p.profileTitle,
-              energy: p.energy,
-              accumulated_dissonance: p.accumulated_dissonance,
-              stance: p.stance,
-              turns_since_last_speak: p.turns_since_last_speak,
-              currentEmotion: p.currentEmotion,
-              emotionIntensity: p.emotionIntensity,
-            })),
-          })
-
-          // Emit opinion convergence metrics (based on latest utterance similarity)
-          const conv = computeConvergence(personas, history)
-          await send('convergence', { turn: speakerTurnCount, min: conv.min, max: conv.max, median: conv.median, clusters: conv.clusters })
-        }
+        const prepared = await getPreparedTurnForSpeaker(speaker, progress)
+        const committed = await commitAgentTurnInternally(prepared)
+        prefetchedTurn = scheduleNextPrefetch()
+        await emitCommittedAgentTurn(prepared, committed)
       }
 
       const closingMetrics = buildDiscussionMetrics(personas, history, speakerTurnCount, discussionSpeakers, noveltyLog, durationPreset)

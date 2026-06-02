@@ -4,8 +4,11 @@
   "private": true,
   "description": "Parameterizable Cognitive Dynamics Engine with Web UI",
   "scripts": {
+    "clean:next": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
+    "predev": "npm run clean:next",
     "dev": "next dev",
-    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
+    "dev:clean": "npm run dev",
+    "prebuild": "npm run clean:next",
     "build": "next build",
     "start": "next start"
   },

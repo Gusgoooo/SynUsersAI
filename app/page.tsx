@@ -39,6 +39,7 @@ const RANDOM_CROWDS = {
 
 const RANDOM_TOPICS = {
   zh: [
+    '年轻人越来越依赖短视频学习，深度阅读会被削弱吗？',
     'AI工具集体涨价50%，用户该不该买单？',
     '远程办公是否正在摧毁团队创造力？',
     'AI生成的内容是否必须强制标注？',
@@ -60,7 +61,6 @@ const RANDOM_TOPICS = {
     'AI推荐的健康建议，普通用户应该相信到什么程度？',
     'AI学习助手会让学生更会学习，还是更会偷懒？',
     '学校是否应该允许学生用AI完成作业初稿？',
-    '年轻人越来越依赖短视频学习，深度阅读会被削弱吗？',
     '知识付费课程如果大量使用AI生成内容，用户能接受吗？',
     '在线教育平台涨价后，家长还会继续付费吗？',
     '大学生为效率工具付费，是刚需还是焦虑消费？',
@@ -210,7 +210,7 @@ const RANDOM_TOPICS = {
 
 const HOME_COPY = {
   zh: {
-    defaultTopic: 'AI工具集体涨价50%，用户该不该买单？',
+    defaultTopic: '年轻人越来越依赖短视频学习，深度阅读会被削弱吗？',
     modes: {
       roundtable: '圆桌讨论',
       abtest: 'A/B测试',
@@ -221,6 +221,10 @@ const HOME_COPY = {
     random: '随机',
     importAudience: '导入人群数据',
     importHint: '支持 CSV、Excel、Word、TXT；会把来源材料蒸馏成记忆、消费习惯和语言风格',
+    importedAudienceTitle: '已导入人群数据',
+    addMoreFiles: '继续添加',
+    removeFile: '移除',
+    importFileLimit: (max: number) => `一次最多上传 ${max} 份人群数据`,
     selectedFiles: '已选择',
     clearFiles: '清除',
     audiencePlaceholder: '描述目标用户群体的特征，例如：25-35岁的互联网产品经理，关注AI工具效率...',
@@ -279,6 +283,10 @@ const HOME_COPY = {
     random: 'Random',
     importAudience: 'Import audience',
     importHint: 'Supports CSV, Excel, Word, and TXT. Source material is distilled into memory, consumption habits, and language style.',
+    importedAudienceTitle: 'Audience data imported',
+    addMoreFiles: 'Add more',
+    removeFile: 'Remove',
+    importFileLimit: (max: number) => `Upload up to ${max} audience files at once`,
     selectedFiles: 'Selected',
     clearFiles: 'Clear',
     audiencePlaceholder: 'Describe the target audience, e.g. US SaaS product managers aged 25-35 who care about AI productivity tools...',
@@ -328,6 +336,17 @@ const HOME_COPY = {
 }
 
 const ALL_DEFAULT_TOPICS = [...RANDOM_TOPICS.zh, ...RANDOM_TOPICS.en]
+const MAX_AUDIENCE_FILES = 6
+
+function fileIdentity(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`
+}
+
+function formatFileSize(size: number): string {
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`
+  if (size >= 1024) return `${Math.max(1, Math.round(size / 1024))} KB`
+  return `${size} B`
+}
 type RuntimeModelProvider = 'gpt-5.5' | 'gemini'
 
 interface RuntimeModelInfo {
@@ -541,6 +560,8 @@ export default function ConfigPage() {
   function randomizeCrowd() {
     const options = RANDOM_CROWDS[locale]
     const pick = options[Math.floor(Math.random() * options.length)]
+    setImportFiles([])
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setCrowdDescription(pick)
   }
 
@@ -552,7 +573,38 @@ export default function ConfigPage() {
 
   function handleFilesSelected(files: FileList | null) {
     setGenError('')
-    setImportFiles(files ? Array.from(files) : [])
+    const selected = files ? Array.from(files) : []
+    if (selected.length === 0) return
+
+    setImportFiles((current) => {
+      const seen = new Set(current.map(fileIdentity))
+      const merged = [...current]
+      for (const file of selected) {
+        const key = fileIdentity(file)
+        if (seen.has(key)) continue
+        seen.add(key)
+        merged.push(file)
+      }
+
+      if (merged.length > MAX_AUDIENCE_FILES) {
+        setGenError(copy.importFileLimit(MAX_AUDIENCE_FILES))
+        return merged.slice(0, MAX_AUDIENCE_FILES)
+      }
+      return merged
+    })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function removeImportFile(index: number) {
+    setGenError('')
+    setImportFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function clearImportFiles() {
+    setGenError('')
+    setImportFiles([])
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   async function handleTopicFilesSelected(files: FileList | null) {
@@ -797,7 +849,16 @@ export default function ConfigPage() {
               <div className="flex items-center justify-between">
                 <Label>{copy.audience}</Label>
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={randomizeCrowd} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <button
+                    type="button"
+                    onClick={randomizeCrowd}
+                    disabled={isImportMode}
+                    className={`text-xs transition-colors ${
+                      isImportMode
+                        ? 'cursor-not-allowed text-muted-foreground/40'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
                     {copy.random}
                   </button>
                   <input
@@ -815,37 +876,52 @@ export default function ConfigPage() {
                     className="h-7 text-xs"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    {copy.importAudience}
+                    {isImportMode ? copy.addMoreFiles : copy.importAudience}
                   </Button>
                 </div>
               </div>
-              <Textarea
-                value={crowdDescription}
-                onChange={(e) => setCrowdDescription(e.target.value)}
-                placeholder={copy.audiencePlaceholder}
-                rows={3}
-              />
+              {isImportMode ? (
+                <div className="rounded-lg border bg-background/60 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-sm font-medium text-foreground">{copy.importedAudienceTitle}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={clearImportFiles}
+                    >
+                      {copy.clearFiles}
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {importFiles.map((file, index) => (
+                      <div key={fileIdentity(file)} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/60 bg-card/70 px-2.5 py-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs text-foreground">{file.name}</div>
+                          <div className="mt-0.5 text-[10px] text-muted-foreground">{formatFileSize(file.size)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => removeImportFile(index)}
+                        >
+                          {copy.removeFile}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Textarea
+                  value={crowdDescription}
+                  onChange={(e) => setCrowdDescription(e.target.value)}
+                  placeholder={copy.audiencePlaceholder}
+                  rows={3}
+                />
+              )}
               <div className="space-y-1">
                 <p className="text-[11px] text-muted-foreground">{copy.importHint}</p>
-                {importFiles.length > 0 && (
-                  <div className="rounded-md border bg-background/60 px-3 py-2 text-[11px]">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        {copy.selectedFiles}: {importFiles.map((file) => file.name).join(', ')}
-                      </span>
-                      <button
-                        type="button"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setImportFiles([])
-                          if (fileInputRef.current) fileInputRef.current.value = ''
-                        }}
-                      >
-                        {copy.clearFiles}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 

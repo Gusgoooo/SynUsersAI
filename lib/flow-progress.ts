@@ -20,16 +20,10 @@ const GENERATION_FLOW_STEPS: Record<Locale, Record<GenerationFlowKind, FlowStep[
   zh: {
     generated: [
       {
-        id: 'validate-input',
-        title: '检查话题、人群与模型配置',
-        detail: '确认话题、人群描述、BYOK 或 .env 模型配置可以用于本次生成。',
+        id: 'prepare-persona-generation',
+        title: '检查配置并组装人设生成指令',
+        detail: '确认话题、人群描述和模型配置，并把语言环境、输出结构和聊天执行契约写入 prompt。',
         estimatedAt: 0,
-      },
-      {
-        id: 'compose-persona-prompt',
-        title: '组装人设生成指令',
-        detail: '把人群描述、语言环境、输出结构和聊天执行契约写入 prompt。',
-        estimatedAt: 2,
       },
       {
         id: 'generate-personas',
@@ -86,16 +80,10 @@ const GENERATION_FLOW_STEPS: Record<Locale, Record<GenerationFlowKind, FlowStep[
   en: {
     generated: [
       {
-        id: 'validate-input',
-        title: 'Checking topic, audience, and model config',
-        detail: 'Verifying the topic, audience description, and BYOK or .env model settings.',
+        id: 'prepare-persona-generation',
+        title: 'Checking config and composing the persona prompt',
+        detail: 'Verifying the topic, audience, and model settings, then packing language context, output schema, and the chat contract into the prompt.',
         estimatedAt: 0,
-      },
-      {
-        id: 'compose-persona-prompt',
-        title: 'Composing the persona prompt',
-        detail: 'Packing the audience, language context, output schema, and chat contract into the prompt.',
-        estimatedAt: 2,
       },
       {
         id: 'generate-personas',
@@ -163,7 +151,9 @@ export function buildFlowProgress(
 ): FlowProgressEvent {
   const normalizedStep = kind === 'imported' && ['validate-upload', 'parse-files', 'rank-evidence'].includes(step)
     ? 'prepare-source-data'
-    : step
+    : kind === 'generated' && ['validate-input', 'compose-persona-prompt'].includes(step)
+      ? 'prepare-persona-generation'
+      : step
   const match = getGenerationFlowSteps(locale, kind).find((item) => item.id === normalizedStep)
   return {
     step: normalizedStep,
