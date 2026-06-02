@@ -22,7 +22,7 @@ export async function GET() {
     : process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions'
   const model = protocol === 'gemini'
     ? process.env.GEMINI_MODEL || process.env.LLM_MODEL || 'gemini-1.5-pro'
-    : process.env.LLM_MODEL || 'gpt-4o-mini'
+    : process.env.LLM_MODEL || 'gpt-5.5'
   const hasApiKey = protocol === 'gemini'
     ? Boolean(process.env.GEMINI_API_KEY || process.env.LLM_API_KEY)
     : Boolean(process.env.LLM_API_KEY)

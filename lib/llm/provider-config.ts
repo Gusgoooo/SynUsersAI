@@ -39,7 +39,7 @@ export const DEFAULT_BYOK_CONFIG: LLMProviderConfig = {
   protocol: 'openai-compatible',
   apiKey: '',
   baseUrl: DEFAULT_OPENAI_COMPATIBLE_URL,
-  model: 'gpt-4o-mini',
+  model: 'gpt-5.5',
 }
 
 export interface LLMProviderPreset {
@@ -57,7 +57,7 @@ export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
     name: 'Custom',
     protocol: 'openai-compatible',
     baseUrl: DEFAULT_OPENAI_COMPATIBLE_URL,
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.5',
     description: 'Manual OpenAI-compatible or Gemini-compatible endpoint.',
   },
   {
@@ -65,7 +65,7 @@ export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
     name: 'OpenAI',
     protocol: 'openai-compatible',
     baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.5',
     description: 'Official OpenAI Chat Completions endpoint.',
   },
   {
@@ -73,7 +73,7 @@ export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
     name: 'OpenRouter',
     protocol: 'openai-compatible',
     baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'openai/gpt-4o-mini',
+    model: 'openai/gpt-5.5',
     description: 'Router for OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek, Qwen, and more.',
   },
   {
@@ -81,16 +81,16 @@ export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
     name: 'ZenMux',
     protocol: 'openai-compatible',
     baseUrl: 'https://zenmux.ai/api/v1',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.5',
     description: 'Multi-protocol model router; this preset uses its OpenAI Chat Completions protocol.',
   },
   {
     id: 'routify',
     name: 'Routify',
-    protocol: 'gemini',
-    baseUrl: 'https://routify.alibaba-inc.com/protocol/vertex/v1beta',
-    model: 'gemini-3-pro-preview',
-    description: 'Routify Vertex-style route. Your local .env can still use Routify through LLM_API_URL or GEMINI_API_URL.',
+    protocol: 'openai-compatible',
+    baseUrl: 'http://routify.alibaba-inc.com/protocol/openai/v1/chat/completions',
+    model: 'gpt-5.5',
+    description: 'Routify OpenAI-compatible route. Local .env and BYOK can use the same OpenAI protocol.',
   },
   {
     id: 'siliconflow',
@@ -180,8 +180,8 @@ export function detectProviderName(baseUrl: string): string {
   return 'Custom'
 }
 
-export function modelProviderFromProtocol(protocol: LLMProtocol): 'gpt-5.4' | 'gemini' {
-  return protocol === 'gemini' ? 'gemini' : 'gpt-5.4'
+export function modelProviderFromProtocol(protocol: LLMProtocol): 'gpt-5.5' | 'gemini' {
+  return protocol === 'gemini' ? 'gemini' : 'gpt-5.5'
 }
 
 export function normalizeProtocol(value: unknown): LLMProtocol {

@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import type { SimAgent } from '@/lib/simulation-store'
 import { useLocaleStore } from '@/lib/locale-store'
 import type { MemoryProfile, TopicExposureLevel, TopicResearchGrounding } from '@/lib/persona/types'
+import { PersonaNameLabel } from '@/components/persona-name-label'
+import { getPersonaDisplayName, getPersonaProfileTitle } from '@/lib/persona/names'
 
 interface PersonaCardProps {
   agent: SimAgent
@@ -284,6 +286,8 @@ export function PersonaCard({ agent }: PersonaCardProps) {
   const triggerKeywords = uniqueStrings(agent.triggerKeywords)
   const frictionTopics = uniqueStrings(agent.frictionTopics)
   const evidence = uniqueEvidence(agent.evidence)
+  const displayName = getPersonaDisplayName(agent)
+  const profileTitle = getPersonaProfileTitle(agent)
   const semanticMemories = asItems(memory?.semanticMemory)
   const compositeMemories = asItems(memory?.episodicCompositeMemory)
   const consumptionHabits = asItems(memory?.consumptionHabits)
@@ -298,8 +302,10 @@ export function PersonaCard({ agent }: PersonaCardProps) {
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3 flex flex-col h-full">
       <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-base">{agent.name}</h3>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-base">
+            <PersonaNameLabel displayName={displayName} profileTitle={profileTitle} />
+          </h3>
           <div className="flex gap-1.5 mt-1.5 flex-wrap">
             {tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="text-[10px]">
@@ -394,10 +400,16 @@ export function PersonaCard({ agent }: PersonaCardProps) {
           </DialogTrigger>
           <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-base">{agent.name} — {copy.dialogTitle}</DialogTitle>
+              <DialogTitle className="text-base">{displayName} — {copy.dialogTitle}</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4 mt-2">
+              {profileTitle && (
+                <div className="rounded-md border bg-background/60 p-3">
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">{profileTitle}</p>
+                </div>
+              )}
+
               <div className="rounded-md border bg-background/60 p-3 space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {copy.detailsTitle}

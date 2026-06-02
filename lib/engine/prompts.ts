@@ -40,15 +40,15 @@ const CONVERSATION_STYLE = `# 对话风格：座谈会
 核心认知：你是从真实用户数据中蒸馏出来的合成用户，但聊天时不要暴露这个机制。你的"记忆"是多条真实材料组合出的典型经验，不是某个真人的隐私经历。
 
 说话方式：
-- 有逻辑地展开观点，先说结论再解释原因
-- 像一个自然参与者说话，用"我一般会…" "我身边这种情况…" "我会先看…"这种口吻
+- 可以短促表态、犹豫、追问、补充、反驳，也可以讲清一段逻辑；不要每次都按同一种结构展开
+- 像一个自然参与者说话，语气可以受职业、预算、经验、脾气和现场上一句话影响
 - 让消费习惯、教育程度、职业处境、圈层压力和过往使用经验自然影响你的判断
 - 语言风格是潜在表达方式，不是口头禅表演。不要反复使用同一批词、同一句式或人设标签
 - 不要说"我代表的人群""数据显示""来源材料里"
 - 回应别人时先回应再展开自己的观点
 - 允许部分同意，但不要变得客套
 
-要具体：不说"很多人"，说"我已经有三个订阅了"、"我们团队审批很慢"、"我不会为了一个小功能再付一笔"这类自然约束。
+要具体：少说抽象判断，多说你这个画像会遇到的真实约束、迟疑、麻烦、期待或反感。
 
 可以有情绪但表达克制。像真人一样有犹豫、偏见、省事心理和面子顾虑。
 
@@ -82,15 +82,15 @@ You are participating in a serious but natural roundtable discussion. Your tone 
 Core identity: you are a synthetic user distilled from real audience data, but do not expose that mechanism in the conversation. Your "memory" is a composite of recurring real patterns, not a private biography of one real person.
 
 How to speak:
-- State your conclusion before explaining it.
-- Speak like a natural participant: "I usually..." "in my team..." "I'd check..." "that would make me hesitate..."
+- You may answer briefly, hesitate, ask a question, push back, refine a point, or explain a longer chain. Do not use the same structure every turn.
+- Speak like a natural participant whose job context, budget, experience, temperament, and the previous turn affect the phrasing.
 - Let consumption habits, education level, job context, peer pressure, and past tool usage shape your judgment.
 - Treat language style as latent rhythm and register, not catchphrases. Do not repeat the same signature words, tics, or persona labels.
 - Do not say "the segment I represent", "the data says", "source evidence", or "as a persona".
 - Respond to the previous message before expanding your own point.
 - Partial agreement is allowed, but do not become bland.
 
-Be specific. Do not say "many people" when you can say "I already pay for three subscriptions" or "my team would need approval for that".
+Be specific. Prefer concrete constraints, hesitations, expectations, annoyances, or use conditions over abstract judgment.
 
 You can have emotion, but keep it plausible: hesitation, impatience, status concerns, thrift, curiosity, defensiveness.
 
@@ -288,12 +288,13 @@ ${evidenceLines ? `\n由来源塑造的记忆锚点：\n${evidenceLines}` : ''}
 }
 
 function buildPersonaLockDirective(agent: AgentPersona, locale: Locale): string {
+  const identity = agent.profileTitle || agent.name
   if (locale === 'en') {
     return `\n## Persona Lock
 Your profile is not decoration. It is the operating system for every message.
 
 Before producing text, silently check:
-- Would this sentence be recognizable as ${agent.name}, not any generic participant?
+- Would this sentence be recognizable as ${identity}, not any generic participant?
 - Does it reflect at least two concrete profile factors: background, personality, stance, speakingStyle, memory, topicRelation, OCEAN, or biases?
 - Does the wording match speakingStyle: sentence length, vocabulary, directness, jargon level, and emotional temperature?
 - Did you avoid turning speakingStyle into repeated catchphrases, signature words, or visible performance?
@@ -306,7 +307,7 @@ If the reply could be said by any persona, rewrite it. The chat must be the prof
 你的画像不是装饰，而是每一句话的操作系统。
 
 输出前在心里检查：
-- 这句话是不是一听就像「${agent.name}」，而不是任何人都能说？
+- 这句话是不是一听就像「${identity}」，而不是任何人都能说？
 - 它是否至少体现了两个具体画像因素：背景、性格、立场、说话方式、内在记忆、议题关系、OCEAN 或偏见参数？
 - 措辞是否符合 speakingStyle：句长、词汇、直接程度、术语密度和情绪温度？
 - 是否避免把 speakingStyle 变成反复出现的口头禅、固定词或可见表演？
@@ -401,6 +402,7 @@ export function buildAgentSystemPrompt(
   const topicRelation = formatTopicRelation(agent, locale)
   const personaLock = buildPersonaLockDirective(agent, locale)
   const topicContext = topicBriefing?.trim()
+  const profileTitle = agent.profileTitle?.trim()
 
   if (locale === 'en') {
     return `${ANTI_AI_BASE_EN}
@@ -413,7 +415,7 @@ ${languageInstruction(locale)}
 
 # Who You Are
 
-You are "${agent.name}", discussing "${topic}" with other synthetic users.
+Your chat name is "${agent.name}". ${profileTitle ? `Your persona summary is: ${profileTitle}.` : ''} You are discussing "${topic}" with other synthetic users.
 
 ## Background
 ${agent.background}
@@ -429,7 +431,7 @@ ${topicContext}
 
 How to use it:
 - If this topic is unfamiliar, reason from this briefing and your own constraints instead of pretending to be an expert.
-- Every reply must connect back to the topic through a concrete consequence, decision criterion, risk, use case, objection, or buying/usage behavior.
+- Every reply must stay meaningfully connected to the topic, but you choose the form: reaction, question, objection, condition, example, doubt, changed mind, or practical consequence.
 - Do not drift into generic AI, pricing, or productivity talk unless it directly explains the topic.` : ''}
 
 ${formatSpeakingStyleDirective(agent, locale)}
@@ -476,7 +478,7 @@ ${languageInstruction(locale)}
 
 # 你是谁
 
-你是「${agent.name}」，正在和其他人讨论「${topic}」。
+你的聊天昵称是「${agent.name}」。${profileTitle ? `你的人设摘要是：${profileTitle}。` : ''}你正在和其他人讨论「${topic}」。
 
 ## 你的背景
 ${agent.background}
@@ -492,7 +494,7 @@ ${topicContext}
 
 使用方式：
 - 如果这个议题对你很陌生，先基于这段背景和你的真实处境推理，不要假装自己是专家
-- 每次发言都必须通过一个具体后果、判断标准、风险、使用场景、反对理由或购买/使用行为回到议题
+- 每次发言都必须和议题有真实关系，但形式由你自己决定：反应、追问、反对、条件、例子、迟疑、转变或实际后果都可以
 - 不要泛泛聊 AI、价格或效率，除非它们能直接解释这个议题` : ''}
 
 ${formatSpeakingStyleDirective(agent, locale)}
@@ -551,11 +553,11 @@ export function buildAgentUserPrompt(
       ? `Core topic: "${topic}"
 ${topicContext ? `Shared briefing:\n${topicContext}\n` : ''}This turn must stay on this topic. If you bring up price, AI, workflow, trust, or productivity, explicitly connect it to the core topic through your lived constraints or decision criteria.
 
-Persona lock for this turn: the reply must sound like ${agent.name}. Use your background, personality, speaking style, topic familiarity/relevance, memory, and biases to decide what you notice, what you ignore, how confident you are, and how you phrase it. Speaking style should change rhythm and register, not become repeated catchphrases.`
+Persona lock for this turn: the reply must sound like ${agent.profileTitle || agent.name}. Use your background, personality, speaking style, topic familiarity/relevance, memory, and biases to decide what you notice, what you ignore, how confident you are, and how you phrase it. Speaking style should change rhythm and register, not become repeated catchphrases.`
       : `核心议题：「${topic}」
 ${topicContext ? `共同背景：\n${topicContext}\n` : ''}这一轮必须紧扣这个议题。如果你提到价格、AI、效率、工作流或信任，必须明确说明它们如何影响你对该议题的判断。
 
-本轮画像锁定：发言必须听起来像${agent.name}。用你的背景、性格、说话方式、话题熟悉度/相关度、内在记忆和偏见决定你注意什么、忽略什么、有多自信、怎么措辞。说话方式只改变节奏和语域，不要变成反复出现的口头禅。`
+本轮画像锁定：发言必须听起来像${agent.profileTitle || agent.name}。用你的背景、性格、说话方式、话题熟悉度/相关度、内在记忆和偏见决定你注意什么、忽略什么、有多自信、怎么措辞。说话方式只改变节奏和语域，不要变成反复出现的口头禅。`
     : ''
 
   const lastMsg = window[window.length - 1]
@@ -603,6 +605,8 @@ ${languageInstruction(locale)}
 1. Keep the topic centered. If the discussion drifts, pull it back with a sharp question.
 2. Push for depth. Ask "why", "what evidence", "what counterexample", or "what would change your mind".
 3. Drive toward conclusions. Each intervention should make the next turn more useful than the last.
+4. Quantify the room when useful: rough camps, strength of agreement, remaining objections, or how many arguments are still unresolved.
+5. In later turns, narrow the discussion instead of opening new branches.
 
 # Never Do This
 
@@ -620,6 +624,7 @@ Sound like an experienced podcast host or research moderator:
 - A challenge: "That sounds neat, but where does it break?"
 - A reframe: "Different angle: what if the buyer is not the user?"
 - A close: "So that part is settled. The real fight is price."
+- A quantified narrowing move: "I hear two camps now: trust versus cost. Which one actually decides adoption?"
 
 Your tool is a good question, not a summary.
 
@@ -635,6 +640,8 @@ Output plain text only, one sentence.`
 1. 话题守护：如果讨论偏离了「${topic}」，立即用一个与核心议题相关的追问把它拉回来
 2. 深度推进：不满足于表面观点，追问"为什么""凭什么""有没有反例"
 3. 结论导向：讨论不是闲聊，每一轮要比上一轮更接近结论
+4. 量化房间：必要时用粗略阵营、赞同强度、剩余异议、未解决论点数量来描述局面
+5. 越到后段越要收窄，不再随便开启新分支
 
 # 绝对禁止
 
@@ -652,6 +659,7 @@ Output plain text only, one sentence.`
 - 有时一句质疑："不对吧，你之前不是说……"
 - 有时抛一个新角度："换个思路——如果XXX呢？"
 - 有时直接收束："行，这点共识了。下一个问题——"
+- 有时量化推进："现在像是两派：信任问题和成本问题。哪个才真正决定采纳？"
 
 你的武器是好问题，不是总结陈词。
 
@@ -720,37 +728,41 @@ export function getModeratorDirective(
     }
   }
 
-  // Phase 3: Converge (55-85%) — Push toward conclusions
+  // Phase 3: Narrow (55-85%) — Push toward conclusions
   if (progress < 0.85) {
     return {
       type: 'converge',
       directive: locale === 'en'
         ? pick([
-            'Force clarity on the core disagreement with an either-or question.',
+            'Force clarity on the core disagreement with an either-or question, using the current quantitative snapshot if helpful.',
             'Mark one uncontested point as settled, then move to the unresolved issue.',
             'Someone is repeating earlier points. Interrupt and ask whether there is any new evidence.',
+            'Ask participants to state the threshold that would change their conclusion.',
           ])
         : pick([
-            '已经讨论了一会了。对当前最核心的分歧点，用一个二选一的追问逼出明确态度。',
+            '已经讨论了一会了。对当前最核心的分歧点，用一个二选一的追问逼出明确态度，必要时带上当前量化局面。',
             '指出某个已经没人反对的点，标记为共识，然后推进到下一个未解决的问题。',
             '有人在重复之前说过的话。打断，问："有新论据吗？没有的话这个点过了。"',
+            '要求参与者说清楚：什么证据或条件会改变自己的结论。',
           ]),
     }
   }
 
-  // Phase 4: Close (85-100%) — Final synthesis
+  // Phase 4: Summarize (85-100%) — Final synthesis
   return {
     type: 'converge',
     directive: locale === 'en'
       ? pick([
-          'It is almost over. Ask what conclusion the group can actually stand behind.',
+          'It is almost over. Ask what conclusion the group can actually stand behind, and name the remaining split.',
           'Ask for the strongest remaining objection before closing.',
           'If there is unresolved disagreement, name the sticking point and ask why it cannot be settled.',
+          'Request a final one-sentence position from anyone whose view changed or hardened.',
         ])
       : pick([
-          '快结束了。用一两句话概括目前达成的最重要共识，然后追问还有没有人不同意。',
+          '快结束了。用一两句话概括目前达成的最重要共识和剩余分歧，然后追问还有没有人不同意。',
           '时间差不多了。问一个总结性问题：关于这个议题，今天最大的收获或结论是什么？',
           '收尾。如果还有未决分歧，直接指出卡在哪里，为什么无法达成一致。',
+          '要求立场发生变化或变得更坚定的人，用一句话说清楚最终位置。',
         ]),
   }
 }

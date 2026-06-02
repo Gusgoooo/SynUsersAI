@@ -1,22 +1,33 @@
 # SynUsers.AI
 
-**Source-grounded synthetic users for AI user research and social simulation.**
+**Source-grounded AI synthetic users for user research, persona prompt export, and social simulation.**
 
-SynUsers.AI turns audience descriptions, CSV/Excel/Word/TXT files, and optional topic material into AI virtual users that can speak, disagree, hesitate, and reason from an internal memory system. It is designed for early user research, concept validation, messaging tests, and A/B-style product exploration.
+SynUsers.AI is an open, self-hostable workspace for creating **AI 合成用户 / AI synthetic users** from audience descriptions, CSV/Excel/Word/TXT files, and optional topic material. It does not just generate a flat persona card, and it does not place personas into fixed response templates. It distills source material into memory, judgment habits, topic fit, cognitive parameters, and speaking style, then lets those AI synthetic users react to one another, influence one another, shift stance, and naturally converge or split through roundtables, A/B concept tests, and traceable research reports.
 
-**SynUsers.AI 不是脚本化聊天 Demo。** 它是一个 AI 虚拟用户与社会模拟工作台：把真实来源材料蒸馏成记忆、消费习惯、认知方式、社会身份、情绪触发点和决策捷径，再让多个虚拟用户在同一个议题中自然互动，逐步推导出分歧、顾虑、转折和结论。
+**SynUsers.AI 不是脚本化聊天 Demo，也不是把人设塞进问答模板。** 它是一个面向产品研究的 **AI 合成用户工作台**：把真实来源材料蒸馏成记忆、消费习惯、认知方式、社会身份、情绪触发点和决策捷径，再让多个 AI 合成用户在同一个议题中读取彼此发言、互相影响、改变或坚持立场，最后通过社会模拟自然得出分歧、顾虑、转折和结论。生成出来的 AI 合成用户还可以导出为完整 Markdown 人设 Prompt，用于复用、审计、二次调试或迁移到其他 agent / workflow。
 
-![SynUsers.AI architecture](./public/synusers-ai-architecture.svg)
+![SynUsers.AI 技术框架](./public/synusers-ai-architecture.svg)
 
 ## Keywords / 关键词
 
-SynUsers.AI sits in the same broad category as synthetic-user research products, but is built as an open, self-hostable, BYOK-friendly alternative focused on source-grounded persona distillation and multi-agent social simulation.
+In this README, the main Chinese term is **AI 合成用户**. It maps most directly to **synthetic users**: AI-generated research participants distilled from source material, with persona parameters, memory, stance, topic fit, and conversational behavior. Related terms include AI 人设、AI 用户、AI 虚拟用户、AI 虚拟人 and AI 合成人, but **AI 合成用户** is the primary product term.
 
-SynUsers.AI 关注的是 **AI 虚拟调研 / synthetic users / AI persona distillation** 这一类问题，但更强调开源可 fork、自托管、用户自带 API Key、来源数据蒸馏、话题关系建模和群体互动模拟。
+SynUsers.AI sits in the same broad category as synthetic-user research products, but is built as an open, self-hostable, BYOK-friendly alternative focused on source-grounded persona distillation, reusable persona prompt export, and multi-agent social simulation.
+
+SynUsers.AI 关注的是 **AI 合成用户 / synthetic users / AI persona distillation** 这一类问题，但更强调开源可 fork、自托管、用户自带 API Key、来源数据蒸馏、话题关系建模、群体互动模拟，以及把蒸馏出来的人设导出为可复用 Markdown Prompt。
 
 SynUsers.AI is an independent project and is not affiliated with Synthetic Users Inc.
 
-**关键词：** 虚拟用户、合成用户、AI 虚拟调研、AI 用户研究、AI 人设蒸馏、来源数据蒸馏、记忆蒸馏、人类式记忆系统、synthetic users、synthetic user research、AI persona、AI persona distillation、source-grounded personas、social simulation、agent-based research、A/B 概念测试、产品概念验证、营销信息测试。
+**关键词：** AI 合成用户、AI 人设、AI 用户、AI 虚拟用户、AI 虚拟人、AI 合成人、虚拟用户、合成用户、AI 虚拟调研、AI 用户研究、AI 人设蒸馏、AI 人设 Prompt、persona prompt export、来源数据蒸馏、记忆蒸馏、人类式记忆系统、社会模拟、社会影响模拟、观点动力学、synthetic users、synthetic user research、AI persona、AI persona distillation、source-grounded personas、social simulation、agent-based research、A/B 概念测试、产品概念验证、营销信息测试。
+
+## 核心卖点
+
+- **来源驱动的 AI 合成用户**：从人群描述或真实文件中蒸馏出有记忆、有立场、有偏见、有语言风格的 AI 合成用户。
+- **人设 Prompt 可导出**：每个 AI 合成用户都可以导出为独立 Markdown 文件，包含基础画像、记忆系统、话题关系、OCEAN、认知偏见、运行时参数和来源锚点。
+- **社会模拟驱动的自然圆桌**：多个 AI 合成用户会读取彼此发言，受到论点、沉默、社会压力、认知张力和情绪变化影响，逐步形成分歧、让步、阵营和结论。
+- **不是模板化人设问答**：圆桌、A/B 测试、访谈预演都不是“人设 + 固定问题模板”，而是让 AI 合成用户结合议题、记忆、偏见和现场上下文生成接近人类经验反应的判断。
+- **可追溯但不破坏真人感**：前台不机械引用证据编号，后台保留来源锚点、记忆激活和报告引用。
+- **BYOK 与自托管友好**：支持 OpenAI-compatible、Gemini-style、router 和本地网关。
 
 ## Quick Start
 
@@ -30,6 +41,12 @@ Open:
 
 ```text
 http://localhost:3000
+```
+
+If you pull new code while the dev server is running and the page appears unstyled or chunk files return 404, restart with a clean Next.js cache:
+
+```bash
+npm run dev:clean
 ```
 
 You can configure the model in either place:
@@ -50,19 +67,32 @@ npm run start
 
 SynUsers.AI 面向产品团队、用户研究、增长实验和早期战略判断。它不会把模拟结果包装成真实市场数据，也不会取代真实访谈、问卷或统计实验；它更像一个 **pre-research workspace**：在投入真实调研成本之前，先快速发现用户可能怎么误解、反对、犹豫、被说服，或者在哪些地方产生分歧。
 
-它的核心不是“让 AI 引用材料”，而是让真实材料变成虚拟用户的内在结构。前台看到的是自然对话；后台保存来源锚点、记忆激活和可解释链路。
+它的核心不是“让 AI 引用材料”，而是让真实材料变成 **AI 合成用户** 的内在结构。前台看到的是自然对话；后台保存来源锚点、记忆激活、观点张力和可解释链路。生成后的 AI 合成用户可以继续参与圆桌和 A/B 测试，也可以导出为完整 Markdown 人设 Prompt，成为可复用的研究资产。
 
 ### 产品如何工作
 
-一次圆桌模拟会经历五层处理：
+一次圆桌模拟会经历六层处理：
 
 1. **来源输入**：目标人群描述，或 CSV、Excel、Word、TXT 等真实材料。
 2. **来源锚点**：系统把材料切分成可追溯的证据单元。
 3. **记忆蒸馏**：从材料里提炼稳定信念、复合经历、消费习惯、认知方式、社会身份、情绪触发、语言语域和决策捷径。
-4. **话题关系**：把每个虚拟用户和当前议题交叉分析，生成熟悉度、相关度、可能误解和判断入口。
-5. **社会模拟**：多个 AI 用户根据画像、记忆、话题关系和最近对话轮流发言，最后形成报告。
+4. **AI 合成用户生成**：形成可预览、可审计、可导出的 AI 合成用户档案。
+5. **话题关系**：把每个 AI 合成用户和当前议题交叉分析，生成熟悉度、相关度、可能误解和判断入口。
+6. **社会模拟**：多个 AI 合成用户根据画像、记忆、话题关系和最近对话轮流发言；彼此的论点会影响后续发言、情绪、张力和立场变化，最后形成报告。
 
-结论不是预设脚本，而是多个 agent 在同一社会情境中互动出来的结果。
+结论不是预设脚本，而是多个 AI 合成用户在同一社会情境中互动出来的结果。
+
+### 社会模拟原则
+
+SynUsers.AI 的圆桌不是先写好结论，再分配给不同角色朗读。每个 AI 合成用户都要结合自己的记忆、偏见、社会身份、当前议题关系和最近对话，自己决定要回应、反驳、追问、让步、沉默还是换一个切入点。
+
+系统会把群体讨论当成一个动态过程，而不是模板问答：
+
+- **相互影响**：一个人的发言会改变其他人的认知张力、情绪状态和下一轮发言冲动。
+- **观点动力学**：讨论可能收敛，也可能分裂成多个阵营；结论来自互动后的群体状态，而不是预先规定的答案。
+- **社会性约束**：职业角色、预算压力、圈层压力、风险感、损失厌恶、权威偏好、从众心理和沉默倾向都会影响反应。
+- **主持人只引导，不代写**：主持人负责收窄问题、追问分歧、推动总结，但不替参与者输出立场。
+- **跨功能一致**：A/B 测试、访谈预演和舆情演练也不把人设放进模板里机械回答，而是模拟人面对具体议题时的经验反应、社会反应和接近纯人类因素的判断过程。
 
 ### 来源数据与记忆蒸馏
 
@@ -79,20 +109,35 @@ SynUsers.AI 的核心优势是把来源数据转化成 **可行动的人类式�
 | 语言语域 | 句长、直接程度、信息密度、术语密度 | 影响节奏和语气，不作为口头禅重复 |
 | 决策捷径 | 判断产品、价格、风险和可信度的经验法则 | “先试用三天，不顺手就走” |
 
-虚拟用户不应该说“根据 E12 证据”。它应该像真人一样说：“我可能不会马上买，我已经有几个订阅了，再多一个月费有点烦。”来源材料仍然影响了发言，只是被内化了。
+AI 合成用户不应该说“根据 E12 证据”。它应该像真人一样说：“我可能不会马上买，我已经有几个订阅了，再多一个月费有点烦。”来源材料仍然影响了发言，只是被内化了。
+
+### 人设 Prompt 导出
+
+SynUsers.AI 的另一个卖点是：**蒸馏出来的 AI 合成用户不是一次性聊天对象，而是可以导出的 Prompt 资产。**
+
+在 `/personas` 页面可以一键导出多个 Markdown 文件，每个 AI 合成用户一个 `.md`。导出内容包括：
+
+- 基础画像：昵称、标题、背景、性格、初始立场、说话风格。
+- 记忆系统：稳定信念、复合经历、消费习惯、认知方式、社会身份、情绪触发、语言语域和决策捷径。
+- 议题关系：熟悉度、相关度、了解层级、可能知道、可能误解、判断入口和私有发言指令。
+- 参数系统：OCEAN 大五人格、认知偏见、参与曲线、运行时能量和认知张力。
+- 来源锚点：证据 ID、来源、位置、权重、用途和引文。
+- 原始 JSON 快照：方便二次开发、复盘和迁移到其他 agent 系统。
+
+这意味着团队可以把 SynUsers.AI 当成一个 **AI 合成用户生成器 / AI 人设 Prompt 工厂**：先用来源数据蒸馏，再把结果带到访谈预演、客服训练、销售演练、agent workflow 或其他研究工具中继续使用。
 
 ### RAG 机制
 
 SynUsers.AI 采用 **Distillation-first, RAG-backed**：
 
-- **先蒸馏**：来源材料先变成 persona 的记忆、习惯、判断方式和语言语域。
+- **先蒸馏**：来源材料先变成 AI 合成用户的记忆、习惯、判断方式和语言语域。
 - **再激活**：每轮发言前，后台检索少量相关来源锚点，作为私有记忆线索。
 - **自然表达**：聊天时不暴露 evidence id、文件名、行号或“数据显示”。
 - **可追溯**：用户需要解释时，可以查看某句话受哪些内在记忆影响，以及背后的来源锚点。
 
 RAG 应该在这些地方显性出现：
 
-- 审核 persona 可信度。
+- 审核 AI 合成用户可信度。
 - 查看“为什么会这样想”。
 - 生成研究报告和结论来源。
 - 审计某个洞察是否被原始材料支持。
@@ -100,28 +145,29 @@ RAG 应该在这些地方显性出现：
 RAG 应该在这些地方无感：
 
 - 实时群聊。
-- persona 自我介绍。
+- AI 合成用户自然入场和实时发言。
 - A/B 测试中的自然评价和选择理由。
 - 任何需要像真人表达的场景。
 
 ### 话题关系层
 
-一个自然的虚拟用户不应该对所有话题都同样懂。SynUsers.AI 在生成人设后会做 **Topic Preparation**：
+一个自然的 AI 合成用户不应该对所有话题都同样懂。SynUsers.AI 在生成 AI 合成用户后会做 **Topic Preparation**：
 
 - 主持人获得一段中立的议题 briefing，用来解释背景、边界和关键问题。
-- 每个 persona 获得一份“人设 × 话题关系画像”：熟悉度、相关度、了解层级、可能知道的事实、可能误解的地方、判断角度和该话题下会显露的特点。
+- 每个 AI 合成用户获得一份“人设 × 话题关系画像”：熟悉度、相关度、了解层级、可能知道的事实、可能误解的地方、判断角度和该话题下会显露的特点。
 
-如果用户上传了「话题资料」，系统会优先使用这些材料；如果配置了 Tavily、Brave Search 或 Serper，也可以加入联网语境；如果都没有，系统会基于 persona 记忆和话题文本做离线推断。
+如果用户上传了「话题资料」，系统会优先使用这些材料；如果配置了 Tavily、Brave Search 或 Serper，也可以加入联网语境；如果都没有，系统会基于 AI 合成用户记忆和话题文本做离线推断。
 
 这让对话更真实：有些人会专业，有些人会半懂，有些人只从预算、风险、学习成本或身份压力切入。
 
 ### 场景
 
-- **AI 群聊圆桌**：围绕一个议题生成多位虚拟用户，观察不同立场如何互动。
-- **A/B 概念测试**：输入多个产品方案、文案、定价或功能包装，让不同人群逐一评价并做强制选择。
-- **用户访谈预演**：用 persona 先压测访谈提纲、追问方向和潜在误读。
-- **概念压力测试**：在真实调研前发现反对理由、价值主张漏洞和采用障碍。
-- **舆情和销售演练**：模拟不同购买意向、风险偏好和身份压力下的回应。
+- **AI 群聊圆桌**：围绕一个议题生成多位 AI 合成用户，观察不同立场如何互相影响、收敛或分裂。
+- **A/B 概念测试**：输入多个产品方案、文案、定价或功能包装，让不同人群在自身约束、社会压力和风险感下评价并做强制选择。
+- **用户访谈预演**：用 AI 合成用户先压测访谈提纲、追问方向和潜在误读。
+- **人设 Prompt 资产化**：把蒸馏出的 AI 合成用户导出为 Markdown Prompt，用于复用、迁移和团队共享。
+- **概念压力测试**：在真实调研前发现反对理由、价值主张漏洞、采用障碍和意见阵营。
+- **舆情和销售演练**：模拟不同购买意向、风险偏好、身份压力和群体影响下的回应。
 
 ### 技术架构
 
@@ -133,8 +179,10 @@ Source Files / Audience Description
   -> Source Anchors
   -> Memory Distillation
   -> Persona Core
+  -> Persona Prompt Export
   -> Topic Preparation
   -> Private Memory Activation
+  -> Social Influence / State Update
   -> Social Simulation Engine
   -> Natural Conversation / A-B Evaluation
   -> Traceable Report
@@ -143,13 +191,14 @@ Source Files / Audience Description
 | 层 | 代码位置 | 职责 |
 | --- | --- | --- |
 | 来源解析 | `lib/population/parse.ts` | 解析 CSV、Excel、Word、TXT，生成来源锚点 |
-| 人设蒸馏 | `lib/population/persona-synthesis.ts` | 将来源锚点蒸馏为 memory profile 和 persona 参数 |
-| 领域模型 | `lib/persona/types.ts` | 定义 persona、memory、evidence、topic relation 等结构 |
-| 话题准备 | `lib/research/topic-preparation.ts` | 生成议题 briefing 和 persona-topic relation |
+| 人设蒸馏 | `lib/population/persona-synthesis.ts` | 将来源锚点蒸馏为 memory profile 和 AI 合成用户参数 |
+| 人设导出 | `lib/persona/export-markdown.ts` | 将 AI 合成用户导出为完整 Markdown 人设 Prompt |
+| 领域模型 | `lib/persona/types.ts` | 定义 AI 合成用户、memory、evidence、topic relation 等结构 |
+| 话题准备 | `lib/research/topic-preparation.ts` | 生成议题 briefing 和 AI 合成用户与话题关系 |
 | 后台检索 | `lib/population/retrieval.ts` | 每轮激活相关来源锚点，但不让角色机械引用 |
 | 对话提示 | `lib/engine/prompts.ts` | 把画像、记忆、偏见、情绪和对话阶段组合成 prompt |
 | 发言选择 | `lib/engine/speaker-selector.ts` | 根据发言冲动、沉默补偿和张力选择下一位发言者 |
-| 状态更新 | `lib/engine/state-updater.ts` | 更新能量、沉默轮次、认知张力和情绪状态 |
+| 状态更新 | `lib/engine/state-updater.ts` | 更新能量、沉默轮次、认知张力、社会影响和情绪状态 |
 | 报告输出 | `lib/engine/reporter.ts` | 将模拟过程整理成 Markdown 报告 |
 
 这种架构的好处：
@@ -157,18 +206,20 @@ Source Files / Audience Description
 - **人格生产效率更高**：解析、蒸馏、话题关系和对话模拟可以分别优化。
 - **对话更自然**：角色读的是蒸馏后的记忆结构，而不是大段原文。
 - **画像和聊天一致**：背景、立场、OCEAN、偏见、记忆和话题关系共同决定每句话。
+- **结论来自互动**：其他人的发言会影响后续发言、张力和态度变化，而不是把预设答案塞进角色口中。
+- **Prompt 资产可复用**：AI 合成用户可以导出为 Markdown 人设 Prompt，而不是只存在于一次会话里。
 - **RAG 可追溯但不打扰**：来源锚点保留在后台，前台保持真人感。
-- **扩展更清晰**：圆桌、A/B 测试、访谈和舆情预演可以复用同一套 persona/memory 层。
+- **扩展更清晰**：圆桌、A/B 测试、访谈和舆情预演可以复用同一套 AI 合成用户 / memory 层。
 - **模型可替换**：OpenAI-compatible、Gemini-style、router 或本地网关都可以接入。
 
 ### 过程可视化
 
 长耗时流程会逐步展示，而不是只显示一个 loading：
 
-- 生成人设：检查输入、组装 prompt、生成基础画像、校验字段、解析话题关系、写入预览。
+- 生成人设：检查输入、组装 prompt、生成基础画像、校验字段、解析话题关系、写入预览，支持导出 Markdown 人设 Prompt。
 - 导入来源数据：检查文件、解析材料、切分来源锚点、筛选相关材料、蒸馏记忆系统、写入预览。
-- 群聊模拟：标准化画像、嵌入立场、主持人开场、自我介绍、选择发言者、激活记忆、生成发言、更新状态、生成报告。
-- A/B 测试：方案属性拆解、人群画像生成、单方案代入式评价、强制选择和结果汇总。
+- 群聊模拟：标准化画像、嵌入立场、模型生成开场、自然入场、选择发言者、激活记忆、生成发言、更新社会状态、自然收束、生成报告。
+- A/B 测试：方案属性拆解、人群画像生成、结合约束和社会因素的评价、强制选择和结果汇总。
 
 ### 模型配置与 BYOK
 
@@ -198,7 +249,7 @@ OpenAI-compatible 协议可以接入：
 ```text
 Protocol: OpenAI-compatible
 Base URL: https://api.openai.com/v1/chat/completions
-Model: gpt-4o-mini
+Model: gpt-5.5
 API Key: sk-...
 ```
 
@@ -210,7 +261,7 @@ API Key: sk-...
 | --- | --- |
 | `LLM_API_KEY` | OpenAI-compatible 接口密钥 |
 | `LLM_API_URL` | Chat Completions 接口地址 |
-| `LLM_MODEL` | OpenAI-compatible 模型名，默认 `gpt-4o-mini` |
+| `LLM_MODEL` | OpenAI-compatible 模型名，默认 `gpt-5.5` |
 | `GEMINI_API_KEY` | Gemini 模式接口密钥 |
 | `GEMINI_API_URL` | Gemini Vertex-style 接口基础地址 |
 | `GEMINI_MODEL` | Gemini 模型名，默认 `gemini-1.5-pro` |
@@ -229,7 +280,7 @@ API Key: sk-...
 | 路径 | 功能 |
 | --- | --- |
 | `/` | 首页配置入口，支持圆桌讨论和 A/B 测试 |
-| `/personas` | AI 人设预览 |
+| `/personas` | AI 合成用户预览与 Markdown 人设 Prompt 导出 |
 | `/chat` | 实时圆桌模拟 |
 | `/report` | Markdown 研究报告 |
 | `/abtest/config` | A/B 测试方案和画像审核 |
@@ -239,7 +290,7 @@ API Key: sk-...
 ```text
 app/                      Next.js App Router 页面和 API routes
 components/               页面组件和 UI 组件
-lib/persona/              Persona、记忆、来源锚点、话题关系等领域模型
+lib/persona/              AI 合成用户、记忆、来源锚点、话题关系等领域模型
 lib/population/           文件解析、来源锚点、记忆蒸馏和后台检索
 lib/research/             可选联网话题研究和话题关系准备
 lib/engine/               对话模拟、发言选择、状态更新、LLM 调用和报告
@@ -254,6 +305,7 @@ public/                   静态资源
 - 对比 slogan、功能包装、定价叙事或落地页主张。
 - 探索不同人群对同一议题的分歧。
 - 发现第一反应、误读、顾虑和反对理由。
+- 生成可复用的 AI 合成用户 Prompt 资产。
 - 为访谈、问卷和可用性测试生成更好的假设。
 
 不适合：
@@ -287,17 +339,42 @@ SynUsers.AI 的设计受到社会模拟、LLM agent、人群样本模拟、心�
 
 ### What It Is
 
-SynUsers.AI is a research-backed workspace for source-grounded synthetic users. It helps teams turn audience material into memory-shaped AI personas, then place those personas into group discussions, A/B concept tests, and other research scenarios.
+SynUsers.AI is a research-backed workspace for source-grounded **AI synthetic users**. It helps teams turn audience material into memory-shaped AI personas, export them as reusable Markdown persona prompts, and place them into group discussions, A/B concept tests, and other research scenarios. The product does not put personas into fixed templates; it lets AI synthetic users react to one another, be shaped by social influence, and reach emergent conclusions.
 
 It is not a replacement for real research. It is a way to ask better questions earlier: What will people misunderstand? Where will they object? Which arguments feel credible? Which users are directly affected, and which users only care indirectly?
+
+### What Makes It Different
+
+- Source-grounded AI synthetic users, not generic role cards.
+- Markdown persona prompt export for every generated AI synthetic user.
+- Memory-first behavior: beliefs, composite experiences, habits, identity, triggers, language register, and decision heuristics shape the conversation.
+- Social-simulation-first roundtables: participant turns influence later turns, tension, silence, stance shifts, convergence, and disagreement.
+- No persona-in-template workflow: roundtables, A/B tests, and interview rehearsal all simulate situated human reactions rather than filling predefined answer slots.
+- Topic fit calibration, so each AI synthetic user has different familiarity, relevance, and misunderstanding risk.
+- Traceable reports and source anchors without forcing the live conversation to sound like citation output.
 
 ### Core Idea
 
 The product is built around one principle:
 
-> The virtual user should not quote the source. The source should become the user's memory.
+> The AI synthetic user should not quote the source. The source should become the user's memory.
 
 Uploaded material is parsed into traceable source anchors, distilled into human-like memory structures, and used privately during conversation. The user sees natural speech; the system keeps evidence, memory activation, and report traceability in the background.
+
+The roundtable conclusion is not scripted. Each AI synthetic user reads the latest conversation, reacts from its own memory and constraints, and can influence other participants through disagreement, social pressure, cognitive dissonance, silence, and persuasion. The moderator narrows and closes the discussion, but the final signal comes from the simulated group interaction.
+
+### Persona Prompt Export
+
+Generated AI synthetic users can be exported from `/personas` as individual Markdown files. Each exported prompt includes:
+
+- Persona basics: name, profile title, background, personality, stance, and speaking style.
+- Internal memory: semantic memory, composite experiences, consumption habits, cognitive style, social identity, emotional triggers, language register, and decision heuristics.
+- Topic relation: familiarity, relevance, exposure level, likely known facts, likely misunderstandings, decision angles, and private instruction.
+- Parameters: OCEAN traits, cognitive biases, engagement curve, runtime energy, and dissonance state.
+- Source anchors: evidence ID, source, locator, weight, reason, and quote.
+- Raw JSON snapshot for debugging, reuse, and migration into other agent workflows.
+
+This makes SynUsers.AI useful not only as a simulation workspace, but also as an **AI synthetic user generator** and **persona prompt factory**.
 
 ### Architecture
 
@@ -307,8 +384,10 @@ Source Files / Audience Description
   -> Source Anchors
   -> Memory Distillation
   -> Persona Core
+  -> Persona Prompt Export
   -> Topic Preparation
   -> Private Memory Activation
+  -> Social Influence / State Update
   -> Social Simulation Engine
   -> Natural Conversation / A-B Evaluation
   -> Traceable Report
@@ -319,23 +398,24 @@ Source Files / Audience Description
 | Source parsing | Turn CSV, Excel, Word, and TXT into source anchors |
 | Memory distillation | Extract beliefs, composite experiences, habits, cognitive style, identity, triggers, language register, and decision heuristics |
 | Persona core | Maintain background, personality, stance, OCEAN, biases, triggers, and friction topics |
-| Topic preparation | Calibrate each persona's familiarity, relevance, likely misunderstandings, and decision angles |
+| Persona export | Export each AI synthetic user as a complete Markdown persona prompt |
+| Topic preparation | Calibrate each AI synthetic user's familiarity, relevance, likely misunderstandings, and decision angles |
 | Private retrieval | Activate relevant evidence silently before each turn |
-| Social simulation | Select speakers, update tension, track silence, and let attitudes shift |
+| Social simulation | Select speakers, update tension, model social influence, track silence, and let attitudes shift |
 | Reporting | Turn the trace into readable research output |
 
 ### RAG Mechanism
 
 SynUsers.AI is **distillation-first and RAG-backed**.
 
-RAG is visible when users audit a persona, inspect why a message was generated, or read a report. It stays invisible during live conversation, persona introductions, and natural A/B evaluation. This keeps the experience human while preserving traceability.
+RAG is visible when users audit an AI synthetic user, inspect why a message was generated, or read a report. It stays invisible during live conversation, initial participant turns, and natural A/B evaluation. This keeps the experience human while preserving traceability.
 
 ### Topic Fit
 
-Virtual users should not sound equally informed about every topic. Topic Preparation creates:
+AI synthetic users should not sound equally informed about every topic. Topic Preparation creates:
 
 - A neutral briefing for the moderator.
-- A persona-topic relation profile for each virtual user.
+- A persona-topic relation profile for each AI synthetic user.
 
 The relation profile includes familiarity, relevance, exposure level, likely known facts, likely misunderstandings, decision angles, and traits that should show up in this topic.
 
@@ -345,9 +425,10 @@ Topic material uploaded by the user has the highest priority. Optional live sear
 
 - Early product concept stress-testing.
 - Messaging, slogan, landing-page, and pricing exploration.
-- A/B concept testing across audience segments.
-- User interview rehearsal.
-- Public-opinion or sales objection rehearsal.
+- A/B concept testing across audience segments with simulated constraints, risk perception, and social response.
+- User interview rehearsal without forcing personas into fixed scripts.
+- Public-opinion or sales objection rehearsal with group influence and stance movement.
+- Reusable AI synthetic user prompt export for other agent workflows.
 - Hypothesis generation before real surveys or interviews.
 
 ### BYOK and Model Routing

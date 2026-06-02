@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { InfoTooltip } from '@/components/info-tooltip'
 import { ReferenceButton, SECTION_REFERENCES } from '@/components/reference-modal'
 import { Slider } from '@/components/ui/slider'
+import { getPersonaDisplayName, getPersonaProfileTitle } from '@/lib/persona/names'
 
 const AGENT_COLORS = [
   '#f97316', '#3b82f6', '#22c55e', '#a855f7',
@@ -36,9 +37,12 @@ function AgentRadar() {
 
   const data = useMemo(() => {
     return agents.map((agent, i) => {
-      const impulse = latestImpulses.find(s => s.name === agent.name)
+      const impulse = latestImpulses.find(s => s.id === agent.id || s.name === agent.name)
+      const displayName = getPersonaDisplayName(agent, i)
+      const profileTitle = getPersonaProfileTitle(agent)
       return {
-        name: agent.name.slice(0, 4),
+        name: displayName,
+        title: profileTitle || displayName,
         energy: agent.energy,
         dissonance: Math.min(100, (impulse?.cd ?? 0) * 100),
         impulse: Math.min(100, Math.max(0, impulse?.impulse ?? 0)),
@@ -56,7 +60,7 @@ function AgentRadar() {
       {data.map((d, i) => (
         <div key={i} className="flex items-center gap-1.5 text-[10px]">
           <div className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-          <span className="truncate w-10">{d.name}</span>
+          <span className="truncate w-10" title={d.title}>{d.name}</span>
           <div className="flex-1 flex gap-0.5">
             <div className="h-3 rounded-sm bg-blue-500/70" style={{ width: `${d.energy}%` }} title={`Energy: ${d.energy}`} />
           </div>
@@ -73,14 +77,18 @@ function ActivationHeatmap() {
 
   const heatData = useMemo(() => {
     const recentRounds = impulseLog.slice(-12)
-    return agents.map((agent, i) => ({
-      name: agent.name,
-      color: AGENT_COLORS[i % AGENT_COLORS.length],
-      cells: recentRounds.map(round => {
-        const score = round.find(s => s.name === agent.name)
-        return score ? Math.min(1, Math.max(0, score.cd)) : 0
-      }),
-    }))
+    return agents.map((agent, i) => {
+      const displayName = getPersonaDisplayName(agent, i)
+      return {
+        name: displayName,
+        title: getPersonaProfileTitle(agent) || displayName,
+        color: AGENT_COLORS[i % AGENT_COLORS.length],
+        cells: recentRounds.map(round => {
+          const score = round.find(s => s.id === agent.id || s.name === agent.name)
+          return score ? Math.min(1, Math.max(0, score.cd)) : 0
+        }),
+      }
+    })
   }, [agents, impulseLog])
 
   if (impulseLog.length < 1) {
@@ -91,7 +99,7 @@ function ActivationHeatmap() {
     <div className="space-y-1">
       {heatData.map((row) => (
         <div key={row.name} className="flex items-center gap-1.5">
-          <span className="text-[9px] text-muted-foreground w-12 truncate shrink-0">{row.name.slice(0, 5)}</span>
+          <span className="text-[9px] text-muted-foreground w-12 truncate shrink-0" title={row.title}>{row.name}</span>
           <div className="flex gap-px flex-1">
             {row.cells.map((val, j) => (
               <div

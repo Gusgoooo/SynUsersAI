@@ -3,6 +3,7 @@ import { computePersonaMetrics, computeAcceptance, aggregateScores, type Concept
 import { languageInstruction, normalizeLocale, type Locale } from '@/lib/locale'
 import { normalizeBiases, normalizeOcean } from '@/lib/persona/defaults'
 import { parseRequestProviderConfig } from '@/lib/llm/request-config'
+import { getPublicErrorMessage } from '@/lib/error-message'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -83,7 +84,7 @@ const SCENARIO_PROMPTS_EN: Record<string, string> = {
 }
 
 export async function POST(req: Request) {
-  const { concepts, segments, dimensions, model = 'gpt-5.4', agentCount = 8, evalConfig, language = 'zh', llmConfig } = await req.json()
+  const { concepts, segments, dimensions, model = 'gpt-5.5', agentCount = 8, evalConfig, language = 'zh', llmConfig } = await req.json()
   const locale = normalizeLocale(language)
   const providerConfig = parseRequestProviderConfig(llmConfig)
   const config: EvalConfig = evalConfig || { scenario: 'friend', customScenario: '', decisionCriteria: '', hypothesis: '', protocol: 'sequential' }
@@ -186,9 +187,7 @@ ${(concepts as Concept[]).map((c, i) => `方案${String.fromCharCode(65 + i)}「
         }
       } catch (e) {
         console.error('[ABTest] Concept attribute inference failed:', e)
-        for (const c of concepts as Concept[]) {
-          conceptAttributes[c.id] = { priceLevel: 0.5, noveltyLevel: 0.5, switchCost: 0.3, socialValidation: 0.3, riskLevel: 0.5 }
-        }
+        throw new Error(locale === 'en' ? 'Concept attribute inference failed. No substitute evaluation was generated.' : '方案属性推断失败。系统不会生成替代评估结果。')
       }
 
       await send('concept-attributes', conceptAttributes)
@@ -427,9 +426,7 @@ ${formatConceptContent(concept, locale)}
               )
             } catch (e) {
               console.error(`[ABTest R1] ${persona.name} × ${concept.name}:`, e)
-              qualitative = locale === 'en'
-                ? { firstImpression: 'Evaluation failed', dimensionScores: {}, attitude: 'neutral', attitudeReason: 'Unable to evaluate' }
-                : { firstImpression: '评估异常', dimensionScores: {}, attitude: 'neutral', attitudeReason: '无法评估' }
+              throw new Error(locale === 'en' ? `${persona.name} failed to evaluate ${concept.name}. No substitute reaction was generated.` : `${persona.name} 对「${concept.name}」的评估生成失败。系统不会生成替代反应。`)
             }
 
             if (!round1Results[persona.id]) round1Results[persona.id] = {}
@@ -558,7 +555,10 @@ ${conceptSummaries}
                 const matched = (concepts as Concept[]).find(c =>
                   c.name === chosenId || chosenId.includes(c.name)
                 )
-                chosenId = matched?.id || validIds[0]
+                if (!matched) {
+                  throw new Error(locale === 'en' ? `${persona.name} returned an invalid forced-choice ID. No substitute choice was generated.` : `${persona.name} 返回了无效的强制选择 ID。系统不会生成替代选择。`)
+                }
+                chosenId = matched.id
               }
 
               await send('forced-choice', {
@@ -571,22 +571,7 @@ ${conceptSummaries}
               })
             } catch (e) {
               console.error(`[ABTest R2] ${persona.name} forced choice:`, e)
-              // Fallback: choose concept with highest acceptance score
-              const metrics = computePersonaMetrics(persona.ocean, persona.biases)
-              let bestId = (concepts as Concept[])[0].id
-              let bestScore = 0
-              for (const c of concepts as Concept[]) {
-                const score = computeAcceptance(metrics, conceptAttributes[c.id]).overallAcceptance
-                if (score > bestScore) { bestScore = score; bestId = c.id }
-              }
-              await send('forced-choice', {
-                personaId: persona.id,
-                personaName: persona.name,
-                segmentId: segment.id,
-                chosenConceptId: bestId,
-                reasoning: locale === 'en' ? 'Inferred from quantitative model' : '基于量化模型推断',
-                rejectionReasons: {},
-              })
+              throw new Error(locale === 'en' ? `${persona.name} failed to make a forced choice. No substitute choice was generated.` : `${persona.name} 的强制选择生成失败。系统不会生成替代选择。`)
             }
           }
         }
@@ -594,7 +579,7 @@ ${conceptSummaries}
 
       await send('done', {})
     } catch (err) {
-      await send('error', { message: String(err) })
+      await send('error', { message: getPublicErrorMessage(err, locale) })
     } finally {
       await writer.close()
     }

@@ -1,5 +1,6 @@
 import { AgentPersona, SimulationSnapshot, UtteranceMessage } from './types'
-import { cosineSimilarity } from './llm'
+import { chatCompletion, cosineSimilarity, type ModelProvider } from './llm'
+import type { LLMProviderConfigInput } from '@/lib/llm/provider-config'
 import type { Locale } from '@/lib/locale'
 
 interface FlashpointEntry {
@@ -17,141 +18,265 @@ interface ConsensusBreaker {
   affectedAgent: string
 }
 
-export function generateMarkdownReport(
+interface MarkdownReportOptions {
+  topic?: string
+  topicBriefing?: string
+  durationLabel?: string
+  model?: ModelProvider
+  providerConfig?: LLMProviderConfigInput
+}
+
+interface SourceAnchor {
+  evidenceId: string
+  sourceName: string
+  locator: string
+  quote: string
+  reason: string
+}
+
+interface PersonaReportSignal {
+  name: string
+  profileTitle: string
+  initialStance: string
+  lastExpressedView: string
+  turnCount: number
+  shiftMagnitude: number
+  peakDissonance: number
+  sourceEvidenceIds: string[]
+}
+
+export async function generateMarkdownReport(
   snapshot: SimulationSnapshot,
   personas: AgentPersona[],
-  locale: Locale = 'zh'
+  locale: Locale = 'zh',
+  options: MarkdownReportOptions = {}
+): Promise<string> {
+  const promptInput = buildReportInput(snapshot, personas, locale, options)
+
+  const markdown = await chatCompletion(
+    [
+      { role: 'system', content: buildReportSystemPrompt(locale) },
+      { role: 'user', content: promptInput },
+    ],
+    {
+      temperature: 0.35,
+      maxTokens: 2600,
+      model: options.model || 'gpt-5.5',
+      providerConfig: options.providerConfig,
+    }
+  )
+  return normalizeMarkdown(markdown)
+}
+
+function buildReportSystemPrompt(locale: Locale): string {
+  if (locale === 'en') {
+    return `You are a senior user-research analyst turning a synthetic-user roundtable into a Markdown preview report.
+
+Do not use a fixed template. Choose the report structure from the topic and the actual conversation.
+
+Quality bar:
+- concise, sharp, and non-repetitive
+- lead with the decision signal, not process narration
+- quantify opinions, disagreement, argument strength, and residual uncertainty when the input supports it
+- explain each persona's stance or viewpoint change using the conversation and dissonance signals
+- cite source anchors as [E...] when available; never invent source IDs
+- if a claim comes only from simulated dialogue, say so plainly
+- include enough source/context detail to make the report credible
+- output Markdown only, no code fence`
+  }
+
+  return `你是资深用户研究分析师，要把一场合成用户圆桌整理成 Markdown preview 报告。
+
+不要套固定模板。报告结构必须根据议题和真实对话内容来定。
+
+质量要求：
+- 简洁、有力、不重复
+- 先给决策信号，不要先讲流程
+- 能量化就量化：意见分布、分歧强度、论据强弱、剩余不确定性
+- 解释每个人设的立场或观点变化，并用对话和张力信号支撑
+- 有来源锚点时用 [E...] 引用；绝不编造来源 ID
+- 如果某个判断只来自模拟对话，要说清楚
+- 展示足够来源/上下文来增加可信度
+- 只输出 Markdown，不要代码块`
+}
+
+function buildReportInput(
+  snapshot: SimulationSnapshot,
+  personas: AgentPersona[],
+  locale: Locale,
+  options: MarkdownReportOptions
 ): string {
-  const lines: string[] = []
-
-  if (locale === 'zh') {
-    lines.push('# AI 社会模拟报告')
-    lines.push('')
-    lines.push(`**生成时间：** ${new Date(snapshot.timestamp).toISOString()}`)
-    lines.push(`**总发言数：** ${snapshot.history.length}`)
-    lines.push(`**参与者：** ${personas.map(p => p.name).join('、')}`)
-    lines.push('')
-
-    const flashpoints = computeFlashpoints(snapshot, personas)
-    lines.push('## 关键分歧点')
-    lines.push('')
-    lines.push('以下概念在不同 agent 之间造成了较高的认知张力。')
-    lines.push('')
-    lines.push('| 排名 | 概念 | 累计张力 | 影响人数 |')
-    lines.push('|------|------|----------|----------|')
-    for (let i = 0; i < Math.min(3, flashpoints.length); i++) {
-      const fp = flashpoints[i]
-      lines.push(`| ${i + 1} | ${fp.concept} | ${fp.totalCD.toFixed(3)} | ${fp.agentsAffected} |`)
-    }
-    lines.push('')
-
-    const breaker = findConsensusBreaker(snapshot, personas)
-    lines.push('## 最大转折发言')
-    lines.push('')
-    if (breaker) {
-      lines.push('- **发言者：** ' + breaker.speakerName)
-      lines.push('- **内容：** "' + breaker.text + '"')
-      lines.push('- **最大张力变化：** ' + breaker.maxSpike.toFixed(4))
-      lines.push('- **影响最明显的对象：** ' + breaker.affectedAgent)
-    } else {
-      lines.push('未检测到显著的单轮张力峰值。')
-    }
-    lines.push('')
-
-    lines.push('## 立场变化矩阵')
-    lines.push('')
-    lines.push('| Agent | 初始/核心立场 | 当前立场 | 变化强度 |')
-    lines.push('|-------|----------------|----------|----------|')
-    for (const persona of personas) {
-      const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-      const totalShift = cdLog.reduce((sum, v) => sum + v, 0)
-      const initialBelief = getInitialBelief(persona, snapshot)
-      lines.push(`| ${persona.name} | ${truncate(initialBelief, 40)} | ${truncate(persona.stance, 40)} | ${totalShift.toFixed(3)} |`)
-    }
-    lines.push('')
-
-    lines.push('## 张力时间线')
-    lines.push('')
-    for (const persona of personas) {
-      const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-      if (cdLog.length === 0) continue
-      const sparkline = cdLog.map(v => v > 0.5 ? '█' : v > 0.3 ? '▓' : v > 0.1 ? '▒' : '░').join('')
-      lines.push(`**${persona.name}:** \`${sparkline}\`（峰值：${Math.max(...cdLog).toFixed(3)}）`)
-    }
-    lines.push('')
-
-    return lines.join('\n')
-  }
-
-  lines.push('# AI Social Simulation Report')
-  lines.push('')
-  lines.push(`**Generated:** ${new Date(snapshot.timestamp).toISOString()}`)
-  lines.push(`**Total Utterances:** ${snapshot.history.length}`)
-  lines.push(`**Agents:** ${personas.map(p => p.name).join(', ')}`)
-  lines.push('')
-
-  // === Friction Flashpoints Matrix ===
-  lines.push('## Friction Flashpoints Matrix')
-  lines.push('')
-  lines.push('Top concepts generating maximum cumulative cognitive dissonance across all agents.')
-  lines.push('')
-
-  const flashpoints = computeFlashpoints(snapshot, personas)
-  lines.push('| Rank | Concept | Cumulative CD | Agents Affected |')
-  lines.push('|------|---------|---------------|-----------------|')
-  for (let i = 0; i < Math.min(3, flashpoints.length); i++) {
-    const fp = flashpoints[i]
-    lines.push(`| ${i + 1} | ${fp.concept} | ${fp.totalCD.toFixed(3)} | ${fp.agentsAffected} |`)
-  }
-  lines.push('')
-
-  // === The Consensus Breaker ===
-  lines.push('## The Consensus Breaker')
-  lines.push('')
-
+  const anchors = collectSourceAnchors(snapshot, personas)
+  const personaSignals = buildPersonaSignals(snapshot, personas)
+  const flashpoints = computeFlashpoints(snapshot, personas).slice(0, 6)
   const breaker = findConsensusBreaker(snapshot, personas)
-  if (breaker) {
-    lines.push(`The single utterance causing the sharpest dissonance spike:`)
-    lines.push('')
-    lines.push(`- **Speaker:** ${breaker.speakerName} (\`${breaker.speakerId}\`)`)
-    lines.push(`- **Text:** "${breaker.text}"`)
-    lines.push(`- **Max Spike:** ${breaker.maxSpike.toFixed(4)}`)
-    lines.push(`- **Most Affected:** ${breaker.affectedAgent}`)
-  } else {
-    lines.push('No significant dissonance spikes detected.')
-  }
-  lines.push('')
+  const convergence = computeFinalConvergence(snapshot, personas)
+  const transcript = formatTranscript(snapshot.history, locale)
 
-  // === Mental Shifting Matrix ===
-  lines.push('## Mental Shifting Matrix')
-  lines.push('')
-  lines.push('Comparison of initial vs. post-debate belief states for all agents.')
-  lines.push('')
-  lines.push('| Agent | Initial Belief | Final Belief | Shift Magnitude |')
-  lines.push('|-------|---------------|--------------|-----------------|')
+  if (locale === 'en') {
+    return `Topic: ${options.topic || 'Unknown'}
+Duration mode: ${options.durationLabel || 'Not specified'}
+Generated at: ${new Date(snapshot.timestamp).toISOString()}
+
+Topic briefing:
+${options.topicBriefing || 'No separate topic briefing.'}
+
+Quantitative signals:
+- Total utterances: ${snapshot.history.length}
+- Participant turns: ${snapshot.history.filter((message) => message.speakerId !== 'system').length}
+- Final opinion similarity median: ${convergence.median.toFixed(3)}
+- Final disagreement spread: ${convergence.spread.toFixed(3)}
+- Estimated final camps: ${convergence.clusters}
+- Top friction concepts: ${flashpoints.map((item) => `${item.concept} (${item.totalCD.toFixed(2)}, ${item.agentsAffected} affected)`).join('; ') || 'none'}
+- Sharpest tension spike: ${breaker ? `${breaker.speakerName} -> ${breaker.affectedAgent}, ${breaker.maxSpike.toFixed(3)}: ${truncate(breaker.text, 120)}` : 'none'}
+
+Persona stance signals:
+${personaSignals.map(formatPersonaSignal).join('\n')}
+
+Source anchors:
+${formatSourceAnchors(anchors, locale)}
+
+Conversation transcript:
+${transcript}
+
+Write the Markdown report now. Keep it concise, but include persona stance changes, quantified disagreement, and citations where available.`
+  }
+
+  return `议题：${options.topic || '未知'}
+时长档位：${options.durationLabel || '未指定'}
+生成时间：${new Date(snapshot.timestamp).toISOString()}
+
+议题背景：
+${options.topicBriefing || '无单独议题背景。'}
+
+量化信号：
+- 总发言数：${snapshot.history.length}
+- 参与者发言数：${snapshot.history.filter((message) => message.speakerId !== 'system').length}
+- 最终观点相似度中位数：${convergence.median.toFixed(3)}
+- 最终分歧跨度：${convergence.spread.toFixed(3)}
+- 估计最终阵营数：${convergence.clusters}
+- 主要摩擦概念：${flashpoints.map((item) => `${item.concept}（张力 ${item.totalCD.toFixed(2)}，影响 ${item.agentsAffected} 人）`).join('；') || '无'}
+- 最大张力跳点：${breaker ? `${breaker.speakerName} -> ${breaker.affectedAgent}，${breaker.maxSpike.toFixed(3)}：${truncate(breaker.text, 120)}` : '无'}
+
+人设立场信号：
+${personaSignals.map(formatPersonaSignal).join('\n')}
+
+来源锚点：
+${formatSourceAnchors(anchors, locale)}
+
+完整对话转写：
+${transcript}
+
+现在生成 Markdown 报告。保持简洁，但必须体现人设立场变化、量化分歧和可用来源引用。`
+}
+
+function formatPersonaSignal(signal: PersonaReportSignal): string {
+  return `- ${signal.name}${signal.profileTitle ? ` (${signal.profileTitle})` : ''}: initial="${truncate(signal.initialStance, 110)}"; final="${truncate(signal.lastExpressedView, 150)}"; turns=${signal.turnCount}; shift=${signal.shiftMagnitude.toFixed(3)}; peak=${signal.peakDissonance.toFixed(3)}; sources=${signal.sourceEvidenceIds.join(', ') || 'none'}`
+}
+
+function collectSourceAnchors(snapshot: SimulationSnapshot, personas: AgentPersona[]): SourceAnchor[] {
+  const map = new Map<string, SourceAnchor>()
 
   for (const persona of personas) {
-    const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-    const totalShift = cdLog.reduce((sum, v) => sum + v, 0)
-    const initialBelief = getInitialBelief(persona, snapshot)
-    lines.push(
-      `| ${persona.name} | ${truncate(initialBelief, 40)} | ${truncate(persona.stance, 40)} | ${totalShift.toFixed(3)} |`
-    )
+    for (const item of persona.evidence || []) {
+      map.set(item.evidenceId, item)
+    }
   }
-  lines.push('')
 
-  // === Dissonance Timeline ===
-  lines.push('## Dissonance Accumulation Log')
-  lines.push('')
+  for (const message of snapshot.history) {
+    for (const item of message.evidence || []) {
+      map.set(item.evidenceId, item)
+    }
+  }
+
+  return [...map.values()].slice(0, 30)
+}
+
+function formatSourceAnchors(anchors: SourceAnchor[], locale: Locale): string {
+  if (anchors.length === 0) {
+    return locale === 'en'
+      ? 'No external/source anchors were attached. Treat claims as simulated-dialogue evidence.'
+      : '没有附加外部来源锚点。报告中的判断应视为模拟对话证据。'
+  }
+
+  return anchors
+    .map((item) => `- [${item.evidenceId}] ${item.sourceName} · ${item.locator}: ${truncate(item.quote, 160)}${item.reason ? ` (${truncate(item.reason, 80)})` : ''}`)
+    .join('\n')
+}
+
+function buildPersonaSignals(snapshot: SimulationSnapshot, personas: AgentPersona[]): PersonaReportSignal[] {
+  return personas.map((persona) => {
+    const messages = snapshot.history.filter((message) => message.speakerId === persona.id)
+    const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
+    const sourceEvidenceIds = new Set<string>()
+
+    for (const message of messages) {
+      for (const id of message.usedEvidenceIds || []) sourceEvidenceIds.add(id)
+      for (const item of message.evidence || []) sourceEvidenceIds.add(item.evidenceId)
+    }
+
+    return {
+      name: persona.name,
+      profileTitle: persona.profileTitle || '',
+      initialStance: persona.stance,
+      lastExpressedView: messages.slice(-2).map((message) => message.text).join(' / ') || persona.stance,
+      turnCount: messages.length,
+      shiftMagnitude: cdLog.reduce((sum, value) => sum + value, 0),
+      peakDissonance: cdLog.length ? Math.max(...cdLog) : 0,
+      sourceEvidenceIds: [...sourceEvidenceIds].slice(0, 8),
+    }
+  })
+}
+
+function formatTranscript(history: UtteranceMessage[], locale: Locale): string {
+  return history
+    .map((message, index) => {
+      const evidence = message.usedEvidenceIds?.length ? ` [${message.usedEvidenceIds.join(', ')}]` : ''
+      return locale === 'en'
+        ? `${index + 1}. ${message.speakerName}: ${truncate(message.text, 360)}${evidence}`
+        : `${index + 1}. ${message.speakerName}：${truncate(message.text, 360)}${evidence}`
+    })
+    .join('\n')
+}
+
+function computeFinalConvergence(
+  snapshot: SimulationSnapshot,
+  personas: AgentPersona[]
+): { median: number; spread: number; clusters: number } {
+  const finalEmbeddings: number[][] = []
   for (const persona of personas) {
-    const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-    if (cdLog.length === 0) continue
-    const sparkline = cdLog.map(v => v > 0.5 ? '█' : v > 0.3 ? '▓' : v > 0.1 ? '▒' : '░').join('')
-    lines.push(`**${persona.name}:** \`${sparkline}\` (peak: ${Math.max(...cdLog).toFixed(3)})`)
+    const message = [...snapshot.history].reverse().find((item) => item.speakerId === persona.id && item.embedding)
+    if (message?.embedding) finalEmbeddings.push(message.embedding)
   }
-  lines.push('')
 
-  return lines.join('\n')
+  if (finalEmbeddings.length < 2) return { median: 0, spread: 0, clusters: 1 }
+
+  const similarities: number[] = []
+  for (let i = 0; i < finalEmbeddings.length; i++) {
+    for (let j = i + 1; j < finalEmbeddings.length; j++) {
+      similarities.push(cosineSimilarity(finalEmbeddings[i], finalEmbeddings[j]))
+    }
+  }
+
+  similarities.sort((a, b) => a - b)
+  const median = similarities[Math.floor(similarities.length / 2)]
+  const spread = similarities[similarities.length - 1] - similarities[0]
+  const threshold = median
+  const visited = new Set<number>()
+  let clusters = 0
+
+  for (let i = 0; i < finalEmbeddings.length; i++) {
+    if (visited.has(i)) continue
+    visited.add(i)
+    clusters++
+    for (let j = i + 1; j < finalEmbeddings.length; j++) {
+      if (!visited.has(j) && cosineSimilarity(finalEmbeddings[i], finalEmbeddings[j]) > threshold) {
+        visited.add(j)
+      }
+    }
+  }
+
+  return { median, spread, clusters }
 }
 
 function computeFlashpoints(snapshot: SimulationSnapshot, personas: AgentPersona[]): FlashpointEntry[] {
@@ -212,18 +337,20 @@ function findConsensusBreaker(snapshot: SimulationSnapshot, personas: AgentPerso
   return breaker
 }
 
-function getInitialBelief(persona: AgentPersona, snapshot: SimulationSnapshot): string {
-  const cdLog = snapshot.trackedDissonanceLog[persona.id] ?? []
-  if (cdLog.length === 0) return persona.stance
-  return persona.stance
-}
-
 function extractConcepts(text: string): string[] {
   return text
     .replace(/[^一-鿿\w\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length >= 2)
     .slice(0, 5)
+}
+
+function normalizeMarkdown(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:markdown|md)?\s*/i, '')
+    .replace(/```$/i, '')
+    .trim()
 }
 
 function truncate(str: string, max: number): string {

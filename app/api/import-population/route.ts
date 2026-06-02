@@ -7,6 +7,8 @@ import { generateTopicPreparation } from '@/lib/research/topic-preparation'
 import type { AgentPersona } from '@/lib/engine/types'
 import { buildFlowProgress, type FlowProgressEvent } from '@/lib/flow-progress'
 import type { Locale } from '@/lib/locale'
+import { normalizePersonaDisplayNames } from '@/lib/persona/names'
+import { getPublicErrorMessage } from '@/lib/error-message'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -57,7 +59,7 @@ function parseImportInput(form: FormData): ImportPopulationInput {
     topic: String(form.get('topic') || ''),
     topicContext: String(form.get('topicContext') || ''),
     agentCount: Math.max(2, Math.min(12, Number(form.get('agentCount') || 4))),
-    model: String(form.get('model') || 'gpt-5.4') as ModelProvider,
+    model: String(form.get('model') || 'gpt-5.5') as ModelProvider,
     locale: normalizeLocale(String(form.get('language') || 'zh')),
     providerConfig: parseRequestProviderConfig(form.get('llmConfig')),
   }
@@ -70,8 +72,7 @@ async function buildImportedPopulation(input: ImportPopulationInput, emit?: Prog
     await emit?.(buildFlowProgress(locale, 'imported', step, detail))
   }
 
-  await emitStep('validate-upload')
-  await emitStep('parse-files')
+  await emitStep('prepare-source-data')
   const { sources, evidenceUnits } = await parsePopulationFiles(files)
   if (evidenceUnits.length === 0) {
     throw new ApiError('No usable text found in uploaded files', 400)
@@ -93,18 +94,22 @@ async function buildImportedPopulation(input: ImportPopulationInput, emit?: Prog
     throw new ApiError('No personas generated from uploaded evidence', 500)
   }
 
-  const typedAgents = agents as AgentPersona[]
+  const typedAgents = normalizePersonaDisplayNames(agents as AgentPersona[])
   await emitStep('prepare-topic-relation')
-  const topicPreparation = await generateTopicPreparation(
-    topic,
-    typedAgents,
-    model,
-    locale,
-    providerConfig,
-    topicContext
-  )
-  for (const agent of typedAgents) {
-    agent.topicRelation = topicPreparation.personaRelations[agent.id]
+  try {
+    const topicPreparation = await generateTopicPreparation(
+      topic,
+      typedAgents,
+      model,
+      locale,
+      providerConfig,
+      topicContext
+    )
+    for (const agent of typedAgents) {
+      agent.topicRelation = topicPreparation.personaRelations[agent.id]
+    }
+  } catch (error) {
+    console.warn('[ImportPopulation] Topic relation preparation skipped:', error)
   }
 
   await emitStep('finalize-preview')
@@ -128,7 +133,7 @@ function streamImportResponse(input: ImportPopulationInput) {
     } catch (err) {
       console.error('[import-population] Error:', err)
       await send('error', {
-        message: String(err),
+        message: getPublicErrorMessage(err, input.locale),
         status: err instanceof ApiError ? err.status : 500,
       })
     } finally {
@@ -166,6 +171,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error('[import-population] Error:', err)
     const status = err instanceof ApiError ? err.status : 500
-    return Response.json({ error: String(err) }, { status })
+    const locale = input?.locale || 'zh'
+    return Response.json({ error: getPublicErrorMessage(err, locale) }, { status })
   }
 }

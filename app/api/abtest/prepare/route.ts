@@ -31,7 +31,7 @@ interface GeneratedPersona {
 }
 
 export async function POST(req: Request) {
-  const { concepts, segments, model = 'gpt-5.4', agentCount = 8, language = 'zh', llmConfig } = await req.json()
+  const { concepts, segments, model = 'gpt-5.5', agentCount = 8, language = 'zh', llmConfig } = await req.json()
   const locale = normalizeLocale(language)
   const providerConfig = parseRequestProviderConfig(llmConfig)
 

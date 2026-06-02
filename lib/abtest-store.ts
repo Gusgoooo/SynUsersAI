@@ -129,7 +129,7 @@ export const useABTestStore = create<ABTestState>((set) => ({
     { id: crypto.randomUUID(), name: '', description: '' },
   ],
   dimensions: ['易用性', '价值感', '购买意愿'],
-  model: 'gpt-5.4',
+  model: 'gpt-5.5',
   agentCount: 8,
   evalConfig: { scenario: 'friend', customScenario: '', decisionCriteria: '', hypothesis: '', protocol: 'sequential' },
   conceptAttributes: {},
